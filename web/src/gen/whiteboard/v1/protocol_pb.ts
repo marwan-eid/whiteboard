@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file whiteboard/v1/protocol.proto.
  */
 export const file_whiteboard_v1_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxIsABCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAEicKBmN1cnNvchgEIAEoCzIVLndoaXRlYm9hcmQudjEuQ3Vyc29ySABCBQoDbXNnIsMBCg1TZXJ2ZXJNZXNzYWdlEikKB3dlbGNvbWUYASABKAsyFi53aGl0ZWJvYXJkLnYxLldlbGNvbWVIABIsCgl0aW1lX3BvbmcYAiABKAsyFy53aGl0ZWJvYXJkLnYxLlRpbWVQb25nSAASKwoFZXJyb3IYAyABKAsyGi53aGl0ZWJvYXJkLnYxLlNlcnZlckVycm9ySAASJQoFZnJhbWUYBCABKAsyFC53aGl0ZWJvYXJkLnYxLkZyYW1lSABCBQoDbXNnIkYKBUhlbGxvEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SEAoIYm9hcmRfaWQYAiABKAkSEQoJY2xpZW50X2lkGAMgASgEIp8BCgdXZWxjb21lEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SDwoHbm9kZV9pZBgCIAEoCRIWCg5zZXJ2ZXJfdGltZV9tcxgDIAEoAxILCgNzZXEYBCABKAQSKwoHb2JqZWN0cxgFIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSFwoPbGFzdF9jbGllbnRfc2VxGAYgASgEIhYKCFRpbWVQaW5nEgoKAnQwGAEgASgBIi4KCFRpbWVQb25nEgoKAnQwGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgDIkYKC1NlcnZlckVycm9yEiYKBGNvZGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLkVycm9yQ29kZRIPCgdtZXNzYWdlGAIgASgJIjwKBVN0YW1wEg8KB3dhbGxfbXMYASABKAMSDwoHY291bnRlchgCIAEoDRIRCgljbGllbnRfaWQYAyABKAQigQQKC09iamVjdFByb3BzEisKBHR5cGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLlNoYXBlVHlwZUgAiAEBEhQKB2RlbGV0ZWQYAiABKAhIAYgBARIOCgF4GAMgASgBSAKIAQESDgoBeRgEIAEoAUgDiAEBEg4KAXcYBSABKAFIBIgBARIOCgFoGAYgASgBSAWIAQESDgoBehgHIAEoCUgGiAEBEhEKBGZpbGwYCCABKA1IB4gBARITCgZzdHJva2UYCSABKA1ICIgBARIZCgxzdHJva2Vfd2lkdGgYCiABKAJICYgBARIRCgR0ZXh0GAsgASgJSAqIAQESEwoGcG9pbnRzGAwgASgMSAuIAQESKQoEZnJvbRgNIAEoCzIWLndoaXRlYm9hcmQudjEuQmluZGluZ0gMiAEBEicKAnRvGA4gASgLMhYud2hpdGVib2FyZC52MS5CaW5kaW5nSA2IAQESFgoJZm9udF9zaXplGA8gASgCSA6IAQFCBwoFX3R5cGVCCgoIX2RlbGV0ZWRCBAoCX3hCBAoCX3lCBAoCX3dCBAoCX2hCBAoCX3pCBwoFX2ZpbGxCCQoHX3N0cm9rZUIPCg1fc3Ryb2tlX3dpZHRoQgcKBV90ZXh0QgkKB19wb2ludHNCBwoFX2Zyb21CBQoDX3RvQgwKCl9mb250X3NpemUiQAoHQmluZGluZxIRCglvYmplY3RfaWQYASABKAkSEAoIYW5jaG9yX3gYAiABKAISEAoIYW5jaG9yX3kYAyABKAIiOwoCT3ASCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzImIKB09wQmF0Y2gSEgoKY2xpZW50X3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJiCg5TZXF1ZW5jZWRCYXRjaBILCgNzZXEYASABKAQSIwoFc3RhbXAYAiABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEh4KA29wcxgDIAMoCzIRLndoaXRlYm9hcmQudjEuT3AibQoDQWNrEhIKCmNsaWVudF9zZXEYASABKAQSCwoDc2VxGAIgASgEEiMKBXN0YW1wGAMgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIQCghyZWplY3RlZBgEIAEoCBIOCgZyZWFzb24YBSABKAkihwEKBUZyYW1lEi4KB2JhdGNoZXMYASADKAsyHS53aGl0ZWJvYXJkLnYxLlNlcXVlbmNlZEJhdGNoEiAKBGFja3MYAiADKAsyEi53aGl0ZWJvYXJkLnYxLkFjaxIsCgdjdXJzb3JzGAMgAygLMhsud2hpdGVib2FyZC52MS5DdXJzb3JVcGRhdGUiHgoGQ3Vyc29yEgkKAXgYASABKAESCQoBeRgCIAEoASJFCgxDdXJzb3JVcGRhdGUSEQoJY2xpZW50X2lkGAEgASgEEgkKAXgYAiABKAESCQoBeRgDIAEoARIMCgRnb25lGAQgASgIInAKC09iamVjdFN0YXRlEgoKAmlkGAEgASgJEikKBXByb3BzGAIgASgLMhoud2hpdGVib2FyZC52MS5PYmplY3RQcm9wcxIqCgZzdGFtcHMYAyADKAsyGi53aGl0ZWJvYXJkLnYxLkZpZWxkU3RhbXBzIkYKC0ZpZWxkU3RhbXBzEiMKBXN0YW1wGAEgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBISCgpmaWVsZF9tYXNrGAIgASgNKogBCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEhoKFkVSUk9SX0NPREVfQkFEX1JFUVVFU1QQARIiCh5FUlJPUl9DT0RFX1VOU1VQUE9SVEVEX1ZFUlNJT04QAhIfChtFUlJPUl9DT0RFX0NMSUVOVF9JRF9JTl9VU0UQAyqvAQoJU2hhcGVUeXBlEhoKFlNIQVBFX1RZUEVfVU5TUEVDSUZJRUQQABITCg9TSEFQRV9UWVBFX1JFQ1QQARIWChJTSEFQRV9UWVBFX0VMTElQU0UQAhIVChFTSEFQRV9UWVBFX1NUSUNLWRADEhMKD1NIQVBFX1RZUEVfVEVYVBAEEhQKEFNIQVBFX1RZUEVfQVJST1cQBRIXChNTSEFQRV9UWVBFX0ZSRUVIQU5EEAZCqgEKEWNvbS53aGl0ZWJvYXJkLnYxQg1Qcm90b2NvbFByb3RvUAFaMXdoaXRlYm9hcmQvaW50ZXJuYWwvcGIvd2hpdGVib2FyZC92MTt3aGl0ZWJvYXJkdjGiAgNXWFiqAg1XaGl0ZWJvYXJkLlYxygINV2hpdGVib2FyZFxWMeICGVdoaXRlYm9hcmRcVjFcR1BCTWV0YWRhdGHqAg5XaGl0ZWJvYXJkOjpWMWIGcHJvdG8z");
+  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxIu0BCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAEicKBmN1cnNvchgEIAEoCzIVLndoaXRlYm9hcmQudjEuQ3Vyc29ySAASKwoIdmlld3BvcnQYBSABKAsyFy53aGl0ZWJvYXJkLnYxLlZpZXdwb3J0SABCBQoDbXNnIsMBCg1TZXJ2ZXJNZXNzYWdlEikKB3dlbGNvbWUYASABKAsyFi53aGl0ZWJvYXJkLnYxLldlbGNvbWVIABIsCgl0aW1lX3BvbmcYAiABKAsyFy53aGl0ZWJvYXJkLnYxLlRpbWVQb25nSAASKwoFZXJyb3IYAyABKAsyGi53aGl0ZWJvYXJkLnYxLlNlcnZlckVycm9ySAASJQoFZnJhbWUYBCABKAsyFC53aGl0ZWJvYXJkLnYxLkZyYW1lSABCBQoDbXNnInEKBUhlbGxvEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SEAoIYm9hcmRfaWQYAiABKAkSEQoJY2xpZW50X2lkGAMgASgEEikKCHZpZXdwb3J0GAQgASgLMhcud2hpdGVib2FyZC52MS5WaWV3cG9ydCKvAQoHV2VsY29tZRIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEg8KB25vZGVfaWQYAiABKAkSFgoOc2VydmVyX3RpbWVfbXMYAyABKAMSCwoDc2VxGAQgASgEEisKB29iamVjdHMYBSADKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFN0YXRlEhcKD2xhc3RfY2xpZW50X3NlcRgGIAEoBBIOCgZvbmxpbmUYByABKA0iFgoIVGltZVBpbmcSCgoCdDAYASABKAEiLgoIVGltZVBvbmcSCgoCdDAYASABKAESFgoOc2VydmVyX3RpbWVfbXMYAiABKAMiRgoLU2VydmVyRXJyb3ISJgoEY29kZRgBIAEoDjIYLndoaXRlYm9hcmQudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkiPAoFU3RhbXASDwoHd2FsbF9tcxgBIAEoAxIPCgdjb3VudGVyGAIgASgNEhEKCWNsaWVudF9pZBgDIAEoBCKBBAoLT2JqZWN0UHJvcHMSKwoEdHlwZRgBIAEoDjIYLndoaXRlYm9hcmQudjEuU2hhcGVUeXBlSACIAQESFAoHZGVsZXRlZBgCIAEoCEgBiAEBEg4KAXgYAyABKAFIAogBARIOCgF5GAQgASgBSAOIAQESDgoBdxgFIAEoAUgEiAEBEg4KAWgYBiABKAFIBYgBARIOCgF6GAcgASgJSAaIAQESEQoEZmlsbBgIIAEoDUgHiAEBEhMKBnN0cm9rZRgJIAEoDUgIiAEBEhkKDHN0cm9rZV93aWR0aBgKIAEoAkgJiAEBEhEKBHRleHQYCyABKAlICogBARITCgZwb2ludHMYDCABKAxIC4gBARIpCgRmcm9tGA0gASgLMhYud2hpdGVib2FyZC52MS5CaW5kaW5nSAyIAQESJwoCdG8YDiABKAsyFi53aGl0ZWJvYXJkLnYxLkJpbmRpbmdIDYgBARIWCglmb250X3NpemUYDyABKAJIDogBAUIHCgVfdHlwZUIKCghfZGVsZXRlZEIECgJfeEIECgJfeUIECgJfd0IECgJfaEIECgJfekIHCgVfZmlsbEIJCgdfc3Ryb2tlQg8KDV9zdHJva2Vfd2lkdGhCBwoFX3RleHRCCQoHX3BvaW50c0IHCgVfZnJvbUIFCgNfdG9CDAoKX2ZvbnRfc2l6ZSJACgdCaW5kaW5nEhEKCW9iamVjdF9pZBgBIAEoCRIQCghhbmNob3JfeBgCIAEoAhIQCghhbmNob3JfeRgDIAEoAiI7CgJPcBIKCgJpZBgBIAEoCRIpCgVwcm9wcxgCIAEoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0UHJvcHMiYgoHT3BCYXRjaBISCgpjbGllbnRfc2VxGAEgASgEEiMKBXN0YW1wGAIgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIeCgNvcHMYAyADKAsyES53aGl0ZWJvYXJkLnYxLk9wImIKDlNlcXVlbmNlZEJhdGNoEgsKA3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJtCgNBY2sSEgoKY2xpZW50X3NlcRgBIAEoBBILCgNzZXEYAiABKAQSIwoFc3RhbXAYAyABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhAKCHJlamVjdGVkGAQgASgIEg4KBnJlYXNvbhgFIAEoCSLwAQoFRnJhbWUSLgoHYmF0Y2hlcxgBIAMoCzIdLndoaXRlYm9hcmQudjEuU2VxdWVuY2VkQmF0Y2gSIAoEYWNrcxgCIAMoCzISLndoaXRlYm9hcmQudjEuQWNrEiwKB2N1cnNvcnMYAyADKAsyGy53aGl0ZWJvYXJkLnYxLkN1cnNvclVwZGF0ZRIrCgdvYmplY3RzGAQgAygLMhoud2hpdGVib2FyZC52MS5PYmplY3RTdGF0ZRITCgZvbmxpbmUYBSABKA1IAIgBARILCgNzZXEYBiABKAQSDQoFbGVhdmUYByADKAlCCQoHX29ubGluZSJDCghWaWV3cG9ydBIJCgF4GAEgASgBEgkKAXkYAiABKAESCQoBdxgDIAEoARIJCgFoGAQgASgBEgsKA2xvZBgFIAEoCCIeCgZDdXJzb3ISCQoBeBgBIAEoARIJCgF5GAIgASgBIkUKDEN1cnNvclVwZGF0ZRIRCgljbGllbnRfaWQYASABKAQSCQoBeBgCIAEoARIJCgF5GAMgASgBEgwKBGdvbmUYBCABKAgicAoLT2JqZWN0U3RhdGUSCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzEioKBnN0YW1wcxgDIAMoCzIaLndoaXRlYm9hcmQudjEuRmllbGRTdGFtcHMiRgoLRmllbGRTdGFtcHMSIwoFc3RhbXAYASABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhIKCmZpZWxkX21hc2sYAiABKA0qiAEKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAASGgoWRVJST1JfQ09ERV9CQURfUkVRVUVTVBABEiIKHkVSUk9SX0NPREVfVU5TVVBQT1JURURfVkVSU0lPThACEh8KG0VSUk9SX0NPREVfQ0xJRU5UX0lEX0lOX1VTRRADKq8BCglTaGFwZVR5cGUSGgoWU0hBUEVfVFlQRV9VTlNQRUNJRklFRBAAEhMKD1NIQVBFX1RZUEVfUkVDVBABEhYKElNIQVBFX1RZUEVfRUxMSVBTRRACEhUKEVNIQVBFX1RZUEVfU1RJQ0tZEAMSEwoPU0hBUEVfVFlQRV9URVhUEAQSFAoQU0hBUEVfVFlQRV9BUlJPVxAFEhcKE1NIQVBFX1RZUEVfRlJFRUhBTkQQBkKqAQoRY29tLndoaXRlYm9hcmQudjFCDVByb3RvY29sUHJvdG9QAVoxd2hpdGVib2FyZC9pbnRlcm5hbC9wYi93aGl0ZWJvYXJkL3YxO3doaXRlYm9hcmR2MaICA1dYWKoCDVdoaXRlYm9hcmQuVjHKAg1XaGl0ZWJvYXJkXFYx4gIZV2hpdGVib2FyZFxWMVxHUEJNZXRhZGF0YeoCDldoaXRlYm9hcmQ6OlYxYgZwcm90bzM");
 
 /**
  * @generated from message whiteboard.v1.ClientMessage
@@ -43,6 +43,12 @@ export type ClientMessage = Message<"whiteboard.v1.ClientMessage"> & {
      */
     value: Cursor;
     case: "cursor";
+  } | {
+    /**
+     * @generated from field: whiteboard.v1.Viewport viewport = 5;
+     */
+    value: Viewport;
+    case: "viewport";
   } | { case: undefined; value?: undefined };
 };
 
@@ -117,6 +123,13 @@ export type Hello = Message<"whiteboard.v1.Hello"> & {
    * @generated from field: uint64 client_id = 3;
    */
   clientId: bigint;
+
+  /**
+   * The region to receive; unset means the whole board.
+   *
+   * @generated from field: whiteboard.v1.Viewport viewport = 4;
+   */
+  viewport?: Viewport | undefined;
 };
 
 /**
@@ -146,7 +159,8 @@ export type Welcome = Message<"whiteboard.v1.Welcome"> & {
   serverTimeMs: bigint;
 
   /**
-   * The board as of seq. Frames that follow carry batches with higher seqs.
+   * The board as of seq, limited to the Hello viewport. Frames that follow
+   * carry batches with higher seqs.
    *
    * @generated from field: uint64 seq = 4;
    */
@@ -164,6 +178,13 @@ export type Welcome = Message<"whiteboard.v1.Welcome"> & {
    * @generated from field: uint64 last_client_seq = 6;
    */
   lastClientSeq: bigint;
+
+  /**
+   * Clients on the board, including this one.
+   *
+   * @generated from field: uint32 online = 7;
+   */
+  online: number;
 };
 
 /**
@@ -544,11 +565,42 @@ export type Frame = Message<"whiteboard.v1.Frame"> & {
   acks: Ack[];
 
   /**
-   * Other clients' cursors that moved or left since the last frame.
+   * Other clients' cursors that moved, or left this client's view, since the last frame.
    *
    * @generated from field: repeated whiteboard.v1.CursorUpdate cursors = 3;
    */
   cursors: CursorUpdate[];
+
+  /**
+   * Objects that came into this client's viewport (by an edit or by the
+   * viewport moving), in full; merge them like any other state.
+   *
+   * @generated from field: repeated whiteboard.v1.ObjectState objects = 4;
+   */
+  objects: ObjectState[];
+
+  /**
+   * Clients on the board, including this one; set when it changed.
+   *
+   * @generated from field: optional uint32 online = 5;
+   */
+  online?: number | undefined;
+
+  /**
+   * The board seq as of this frame; the client has now seen every change up
+   * to it that concerns its viewport.
+   *
+   * @generated from field: uint64 seq = 6;
+   */
+  seq: bigint;
+
+  /**
+   * Objects that left this client's viewport (or were deleted); drop them.
+   * The server decides what each client holds; clients never evict on their own.
+   *
+   * @generated from field: repeated string leave = 7;
+   */
+  leave: string[];
 };
 
 /**
@@ -557,6 +609,47 @@ export type Frame = Message<"whiteboard.v1.Frame"> & {
  */
 export const FrameSchema: GenMessage<Frame> = /*@__PURE__*/
   messageDesc(file_whiteboard_v1_protocol, 14);
+
+/**
+ * The board region a client receives: its visible area plus a margin.
+ * The server sends edits only for objects in it, and when lod is set only
+ * the properties needed to draw boxes (for zoomed-out views).
+ *
+ * @generated from message whiteboard.v1.Viewport
+ */
+export type Viewport = Message<"whiteboard.v1.Viewport"> & {
+  /**
+   * @generated from field: double x = 1;
+   */
+  x: number;
+
+  /**
+   * @generated from field: double y = 2;
+   */
+  y: number;
+
+  /**
+   * @generated from field: double w = 3;
+   */
+  w: number;
+
+  /**
+   * @generated from field: double h = 4;
+   */
+  h: number;
+
+  /**
+   * @generated from field: bool lod = 5;
+   */
+  lod: boolean;
+};
+
+/**
+ * Describes the message whiteboard.v1.Viewport.
+ * Use `create(ViewportSchema)` to create a new message.
+ */
+export const ViewportSchema: GenMessage<Viewport> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_protocol, 15);
 
 /**
  * Presence: the sender's pointer in board coordinates. Not persisted.
@@ -580,7 +673,7 @@ export type Cursor = Message<"whiteboard.v1.Cursor"> & {
  * Use `create(CursorSchema)` to create a new message.
  */
 export const CursorSchema: GenMessage<Cursor> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 15);
+  messageDesc(file_whiteboard_v1_protocol, 16);
 
 /**
  * @generated from message whiteboard.v1.CursorUpdate
@@ -614,7 +707,7 @@ export type CursorUpdate = Message<"whiteboard.v1.CursorUpdate"> & {
  * Use `create(CursorUpdateSchema)` to create a new message.
  */
 export const CursorUpdateSchema: GenMessage<CursorUpdate> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 16);
+  messageDesc(file_whiteboard_v1_protocol, 17);
 
 /**
  * @generated from message whiteboard.v1.ObjectState
@@ -641,7 +734,7 @@ export type ObjectState = Message<"whiteboard.v1.ObjectState"> & {
  * Use `create(ObjectStateSchema)` to create a new message.
  */
 export const ObjectStateSchema: GenMessage<ObjectState> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 17);
+  messageDesc(file_whiteboard_v1_protocol, 18);
 
 /**
  * The stamp of every property whose field number's bit is set in field_mask.
@@ -665,7 +758,7 @@ export type FieldStamps = Message<"whiteboard.v1.FieldStamps"> & {
  * Use `create(FieldStampsSchema)` to create a new message.
  */
 export const FieldStampsSchema: GenMessage<FieldStamps> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 18);
+  messageDesc(file_whiteboard_v1_protocol, 19);
 
 /**
  * @generated from enum whiteboard.v1.ErrorCode

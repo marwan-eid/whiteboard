@@ -33,6 +33,10 @@ type Config struct {
 	Now       func() time.Time
 	// OnFrame, if set, is called (without locks held) after each frame is applied.
 	OnFrame func(*pb.Frame)
+	// Viewport limits what the client receives; nil means the whole board.
+	Viewport *pb.Viewport
+	// Trace, if set, receives a line per sync event (for debugging tests).
+	Trace func(string)
 }
 
 // ErrOffline is returned when an operation needs a connection the client doesn't have.
@@ -58,6 +62,11 @@ type Client struct {
 	connects      int
 	acked         []uint64 // client seqs the server acked as applied
 	cursors       map[uint64][2]float64
+	// held is what the server believes this client holds: the objects in
+	// its viewport. Only the server changes it (Welcome, Frame.objects,
+	// Frame.leave). The replica can also contain objects with pending local
+	// edits that are not held; they are dropped once acked.
+	held map[string]bool
 }
 
 func New(cfg Config) *Client {
@@ -75,6 +84,7 @@ func New(cfg Config) *Client {
 		nextClientSeq: 1,
 		welcomed:      make(chan struct{}),
 		cursors:       map[uint64][2]float64{},
+		held:          map[string]bool{},
 	}
 }
 
@@ -138,6 +148,7 @@ func (c *Client) dial(ctx context.Context) error {
 		ProtocolVersion: protocol.Version,
 		BoardId:         c.cfg.BoardID,
 		ClientId:        c.cfg.ClientID,
+		Viewport:        c.Viewport(),
 	}}}
 	if err := write(ctx, ws, hello); err != nil {
 		ws.CloseNow()
@@ -198,6 +209,7 @@ func (c *Client) Edit(ops ...*pb.Op) {
 	c.nextClientSeq++
 	c.doc.ApplyBatch(ops, st)
 	c.pending = append(c.pending, batch)
+	c.trace("edit cs=%d stamp=%v ops=%v", batch.GetClientSeq(), st, ops)
 	if c.conn != nil && c.isWelcomed() {
 		c.sendLocked(batch)
 	}
@@ -289,8 +301,13 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 		ws.CloseNow()
 		return
 	}
+	c.trace("welcome seq=%d last_cs=%d objects=%v", w.GetSeq(), w.GetLastClientSeq(), w.GetObjects())
 	c.doc = d
 	c.serverSeq = w.GetSeq()
+	clear(c.held)
+	for _, s := range w.GetObjects() {
+		c.held[s.GetId()] = true
+	}
 	clear(c.cursors) // positions are re-sent as people move
 	kept := c.pending[:0]
 	for _, b := range c.pending {
@@ -308,6 +325,8 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 		}
 	}
 	close(c.welcomed)
+	// The viewport may have changed after the Hello went out.
+	c.sendViewportLocked()
 	for _, b := range c.pending {
 		c.sendLocked(b)
 	}
@@ -321,15 +340,39 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 	if c.conn != ws {
 		return false
 	}
-	maxSeq := c.serverSeq
+	c.trace("frame %v", f)
+	maxSeq := max(c.serverSeq, f.GetSeq())
+	touched := map[string]bool{} // objects our acked batches edited
 	for _, b := range f.GetBatches() {
 		if b.GetSeq() <= c.serverSeq {
 			continue
 		}
 		st := hlc.FromProto(b.GetStamp())
-		c.doc.ApplyBatch(b.GetOps(), st)
+		for _, op := range b.GetOps() {
+			// Deltas only apply to objects we hold; the server sends objects
+			// that come into view in full (f.Objects).
+			if c.held[op.GetId()] {
+				c.doc.Apply(op, st)
+			}
+		}
 		c.clock.Observe(st)
 		maxSeq = max(maxSeq, b.GetSeq())
+	}
+	// A left object with pending local edits stays until they are acked: the
+	// server does not echo our own edits, so deleting it would lose them.
+	busy := c.pendingIDs()
+	for _, id := range f.GetLeave() {
+		delete(c.held, id)
+		if !busy[id] {
+			c.doc.Delete(id)
+		}
+	}
+	for _, s := range f.GetObjects() {
+		c.doc.MergeState(s)
+		c.held[s.GetId()] = true
+		for _, fs := range s.GetStamps() {
+			c.clock.Observe(hlc.FromProto(fs.GetStamp()))
+		}
 	}
 	for _, cu := range f.GetCursors() {
 		if cu.GetGone() {
@@ -346,6 +389,9 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		}
 		sent := c.pending[i]
 		c.pending = append(c.pending[:i], c.pending[i+1:]...)
+		for _, op := range sent.GetOps() {
+			touched[op.GetId()] = true
+		}
 		switch {
 		case a.GetRejected():
 			resync = true
@@ -360,6 +406,7 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		}
 	}
 	c.serverSeq = maxSeq
+	c.dropUnheld(touched)
 	if resync {
 		// Reconnecting yields a fresh snapshot; pending edits are reapplied on top.
 		c.resyncs++
@@ -453,4 +500,77 @@ func write(ctx context.Context, ws *websocket.Conn, msg *pb.ClientMessage) error
 		return err
 	}
 	return ws.Write(ctx, websocket.MessageBinary, data)
+}
+
+// Viewport returns the region this client receives (nil: the whole board).
+func (c *Client) Viewport() *pb.Viewport {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cfg.Viewport
+}
+
+// SetViewport changes the region this client receives (nil: the whole board).
+func (c *Client) SetViewport(v *pb.Viewport) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cfg.Viewport = v
+	if c.conn != nil && c.isWelcomed() {
+		c.sendViewportLocked()
+	}
+}
+
+// dropUnheld removes local-only objects (edited here but not held) once no
+// edits to them are pending: the server will send them if they come into view.
+func (c *Client) dropUnheld(ids map[string]bool) {
+	if len(ids) == 0 {
+		return
+	}
+	busy := c.pendingIDs()
+	for id := range ids {
+		if !busy[id] && !c.held[id] {
+			c.doc.Delete(id)
+		}
+	}
+}
+
+// InView is the interest rule shared with the server (internal/board):
+// visible, and its box intersects the viewport (nil: everywhere).
+func InView(o *doc.Object, v *pb.Viewport) bool {
+	if o == nil || !o.Visible() {
+		return false
+	}
+	if v == nil {
+		return true
+	}
+	p := o.Props
+	return p.GetX() <= v.GetX()+v.GetW() && v.GetX() <= p.GetX()+p.GetW() &&
+		p.GetY() <= v.GetY()+v.GetH() && v.GetY() <= p.GetY()+p.GetH()
+}
+
+func (c *Client) sendViewportLocked() {
+	msg := c.cfg.Viewport
+	if msg == nil {
+		// Covers every valid coordinate.
+		msg = &pb.Viewport{X: -2 * protocol.MaxCoord, Y: -2 * protocol.MaxCoord, W: 4 * protocol.MaxCoord, H: 4 * protocol.MaxCoord}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = write(ctx, c.conn, &pb.ClientMessage{Msg: &pb.ClientMessage_Viewport{Viewport: msg}})
+}
+
+func (c *Client) trace(format string, args ...any) {
+	if c.cfg.Trace != nil {
+		c.cfg.Trace(fmt.Sprintf(format, args...))
+	}
+}
+
+// pendingIDs is the set of objects with unacknowledged local edits.
+func (c *Client) pendingIDs() map[string]bool {
+	busy := map[string]bool{}
+	for _, b := range c.pending {
+		for _, op := range b.GetOps() {
+			busy[op.GetId()] = true
+		}
+	}
+	return busy
 }

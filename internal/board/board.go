@@ -1,9 +1,9 @@
 // Package board runs one actor goroutine per live board. The actor is the
 // board's single writer: it validates client batches, assigns each a seq and
 // merges it into the document. Once per tick it durably appends that tick's
-// batches to the log, then sends every client one frame with other clients'
-// batches and acks for its own: nothing is acked or shown to others before
-// it is committed.
+// batches to the log, then sends every client one frame with the parts of
+// other clients' batches that touch its viewport, acks for its own, and
+// nearby cursors: nothing is acked or shown to others before it is committed.
 //
 // Failure handling is crash-only: if the board cannot commit, it drops every
 // client and unloads. Clients keep unacked edits and resend them to the
@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
 	"whiteboard/internal/protocol"
+	"whiteboard/internal/spatial"
 )
 
 // errClosed means the board unloaded normally; callers get a fresh one from the Registry.
@@ -97,6 +99,19 @@ func (c *Config) setDefaults() {
 	}
 }
 
+// rectOK is an object's box, or ok=false if it is not visible.
+type rectOK struct {
+	r  spatial.Rect
+	ok bool
+}
+
+// pending is an applied batch waiting for the tick's commit.
+type pending struct {
+	entry         LogEntry
+	before, after []rectOK
+	received      time.Time
+}
+
 type Board struct {
 	id      string
 	cfg     Config
@@ -111,18 +126,23 @@ type Board struct {
 
 	// Owned by the actor goroutine.
 	doc             *doc.Doc
+	grid            *spatial.Grid // boxes of visible objects
 	seq             uint64
 	clock           *hlc.Clock
 	lastClientSeq   map[uint64]uint64
-	clients         map[uint64]Conn
-	joining         []Conn
-	uncommitted     []LogEntry
+	clients         map[uint64]*clientState
+	joining         []*clientState
+	uncommitted     []pending
 	outAcks         map[uint64][]*pb.Ack
+	onlineChanged   bool
 	idleSince       time.Time
 	lastSnapshotSeq uint64
 	lastSnapshotAt  time.Time
 	snapshotting    chan struct{} // closed when the in-flight snapshot write finishes
+	cursorGrid      *spatial.Grid // cursor positions, keyed by base-36 client id
+	cursorIDs       map[string]uint64
 	goneCursors     []uint64
+	frameBuf        []byte
 
 	// Written by connection goroutines, drained by the actor each tick.
 	cursorMu    sync.Mutex
@@ -130,8 +150,9 @@ type Board struct {
 }
 
 type joinMsg struct {
-	conn  Conn
-	reply chan error
+	conn     Conn
+	viewport *pb.Viewport
+	reply    chan error
 }
 
 type leaveMsg struct{ conn Conn }
@@ -139,6 +160,12 @@ type leaveMsg struct{ conn Conn }
 type batchMsg struct {
 	clientID uint64
 	batch    *pb.OpBatch
+	received time.Time
+}
+
+type viewportMsg struct {
+	conn     Conn
+	viewport *pb.Viewport
 }
 
 type snapshotMsg struct {
@@ -167,12 +194,15 @@ func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClo
 		done:           make(chan struct{}),
 		onClose:        onClose,
 		doc:            doc.New(),
+		grid:           spatial.NewGrid(512, 256),
 		clock:          hlc.NewClock(0, func() int64 { return cfg.Now().UnixMilli() }),
 		lastClientSeq:  map[uint64]uint64{},
-		clients:        map[uint64]Conn{},
+		clients:        map[uint64]*clientState{},
 		outAcks:        map[uint64][]*pb.Ack{},
 		idleSince:      cfg.Now(),
 		lastSnapshotAt: cfg.Now(),
+		cursorGrid:     spatial.NewGrid(512, 1),
+		cursorIDs:      map[string]uint64{},
 		cursorMoved:    map[uint64][2]float64{},
 	}
 	go b.run()
@@ -202,9 +232,9 @@ func (b *Board) send(ctx context.Context, m any) error {
 	}
 }
 
-func (b *Board) join(ctx context.Context, c Conn) error {
+func (b *Board) join(ctx context.Context, c Conn, viewport *pb.Viewport) error {
 	reply := make(chan error, 1)
-	if err := b.send(ctx, joinMsg{conn: c, reply: reply}); err != nil {
+	if err := b.send(ctx, joinMsg{conn: c, viewport: viewport, reply: reply}); err != nil {
 		return err
 	}
 	select {
@@ -224,7 +254,13 @@ func (b *Board) Leave(c Conn) {
 
 // Submit hands a client batch to the board. The result arrives as an Ack in a later frame.
 func (b *Board) Submit(ctx context.Context, clientID uint64, batch *pb.OpBatch) error {
-	return b.send(ctx, batchMsg{clientID: clientID, batch: batch})
+	return b.send(ctx, batchMsg{clientID: clientID, batch: batch, received: time.Now()})
+}
+
+// SetViewport changes the region a connection receives. It is ordered with
+// the connection's batches.
+func (b *Board) SetViewport(ctx context.Context, c Conn, v *pb.Viewport) error {
+	return b.send(ctx, viewportMsg{conn: c, viewport: v})
 }
 
 // SetCursor records a client's pointer position for the next tick. Cursors
@@ -236,7 +272,7 @@ func (b *Board) SetCursor(clientID uint64, x, y float64) {
 	b.cursorMu.Unlock()
 }
 
-// Snapshot returns the current state, including batches not yet committed.
+// Snapshot returns the whole current state, including batches not yet committed.
 func (b *Board) Snapshot(ctx context.Context) (Snapshot, error) {
 	reply := make(chan Snapshot, 1)
 	if err := b.send(ctx, snapshotMsg{reply: reply}); err != nil {
@@ -344,6 +380,12 @@ func (b *Board) load() error {
 		b.seq = e.Seq
 		b.lastClientSeq[e.ClientID] = max(b.lastClientSeq[e.ClientID], e.ClientSeq)
 	}
+	b.doc.Range(func(o *doc.Object) bool {
+		if r, ok := bounds(o); ok {
+			b.grid.Set(o.ID, r)
+		}
+		return true
+	})
 	b.metrics.BoardLoadDuration.Observe(time.Since(start).Seconds())
 	b.log.Info("board loaded", "seq", b.seq, "objects", b.doc.Len(), "replayed", len(loaded.Tail), "took", time.Since(start))
 	return nil
@@ -358,41 +400,50 @@ func (b *Board) handle(m any) {
 		id := m.conn.ClientID()
 		if old, taken := b.clients[id]; taken {
 			b.metrics.ClientsKicked.WithLabelValues("replaced").Inc()
-			old.Kick(KickReplaced)
-			b.remove(old)
+			old.conn.Kick(KickReplaced)
+			b.remove(old.conn)
 		}
-		b.clients[id] = m.conn
-		b.joining = append(b.joining, m.conn)
+		view, lod := viewRect(m.viewport)
+		c := &clientState{conn: m.conn, view: view, lod: lod, moves: map[string]bool{}}
+		b.clients[id] = c
+		b.joining = append(b.joining, c)
+		b.onlineChanged = true
 		m.reply <- nil
 	case leaveMsg:
 		b.remove(m.conn)
 	case batchMsg:
-		b.apply(m.clientID, m.batch)
+		b.apply(m.clientID, m.batch, m.received)
+	case viewportMsg:
+		if c := b.clients[m.conn.ClientID()]; c != nil && c.conn == m.conn {
+			b.setViewport(m.conn.ClientID(), c, m.viewport)
+		}
 	case snapshotMsg:
 		m.reply <- Snapshot{Seq: b.seq, Objects: b.doc.Snapshot()}
 	}
 }
 
-func (b *Board) remove(c Conn) {
-	id := c.ClientID()
-	if b.clients[id] != c {
+func (b *Board) remove(conn Conn) {
+	id := conn.ClientID()
+	c := b.clients[id]
+	if c == nil || c.conn != conn {
 		return
 	}
 	delete(b.clients, id)
 	delete(b.outAcks, id)
-	b.goneCursors = append(b.goneCursors, id)
 	for i, j := range b.joining {
 		if j == c {
 			b.joining = append(b.joining[:i], b.joining[i+1:]...)
 			break
 		}
 	}
+	b.goneCursors = append(b.goneCursors, id)
+	b.onlineChanged = true
 	if len(b.clients) == 0 {
 		b.idleSince = b.cfg.Now()
 	}
 }
 
-func (b *Board) apply(clientID uint64, batch *pb.OpBatch) {
+func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 	if _, ok := b.clients[clientID]; !ok {
 		return // left before its batch was processed
 	}
@@ -424,12 +475,27 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch) {
 	}
 	b.clock.Observe(st)
 
-	b.doc.ApplyBatch(batch.GetOps(), st)
+	// Record each object's box before and after its op; flush uses them to
+	// decide who gets the op, the whole object, or nothing.
+	ops := batch.GetOps()
+	p := pending{before: make([]rectOK, len(ops)), after: make([]rectOK, len(ops)), received: received}
+	for i, op := range ops {
+		id := op.GetId()
+		r, ok := bounds(b.doc.Get(id))
+		p.before[i] = rectOK{r, ok}
+		b.doc.Apply(op, st)
+		r, ok = bounds(b.doc.Get(id))
+		p.after[i] = rectOK{r, ok}
+		if ok {
+			b.grid.Set(id, r)
+		} else {
+			b.grid.Remove(id)
+		}
+	}
 	b.seq++
 	b.metrics.BatchesApplied.Inc()
-	b.uncommitted = append(b.uncommitted, LogEntry{
-		Seq: b.seq, ClientID: clientID, ClientSeq: cs, Stamp: st.Proto(), Ops: batch.GetOps(),
-	})
+	p.entry = LogEntry{Seq: b.seq, ClientID: clientID, ClientSeq: cs, Stamp: st.Proto(), Ops: ops}
+	b.uncommitted = append(b.uncommitted, p)
 	b.ack(clientID, &pb.Ack{ClientSeq: cs, Seq: b.seq, Stamp: st.Proto()})
 }
 
@@ -451,100 +517,171 @@ func (b *Board) ack(clientID uint64, a *pb.Ack) {
 // the frames carried.
 func (b *Board) flush() error {
 	start := time.Now()
-	var batches []*pb.SequencedBatch
+	var batches []encodedBatch
 	if len(b.uncommitted) > 0 {
+		entries := make([]LogEntry, len(b.uncommitted))
+		for i, p := range b.uncommitted {
+			entries[i] = p.entry
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), b.cfg.IOTimeout)
-		err := b.cfg.Store.Append(ctx, b.id, b.uncommitted)
+		err := b.cfg.Store.Append(ctx, b.id, entries)
 		cancel()
 		b.metrics.CommitDuration.Observe(time.Since(start).Seconds())
 		if err != nil {
 			return err
 		}
-		batches = make([]*pb.SequencedBatch, len(b.uncommitted))
-		for i, e := range b.uncommitted {
-			batches[i] = &pb.SequencedBatch{Seq: e.Seq, Stamp: e.Stamp, Ops: e.Ops}
+		batches = make([]encodedBatch, len(b.uncommitted))
+		for i, p := range b.uncommitted {
+			batches[i] = encodeBatch(p.entry, p.before, p.after)
 		}
-		b.uncommitted = b.uncommitted[:0]
 	}
 
-	joining := map[Conn]bool{}
+	moved := b.updateCursors()
+	joining := map[*clientState]bool{}
 	for _, c := range b.joining {
 		joining[c] = true
 	}
-	cursors := b.takeCursorUpdates()
-
-	if len(batches) > 0 || len(b.outAcks) > 0 || len(cursors) > 0 {
-		for id, c := range b.clients {
-			if joining[c] {
-				continue
-			}
-			frame := &pb.Frame{Acks: b.outAcks[id]}
-			for _, sb := range batches {
-				if sb.GetStamp().GetClientId() != id {
-					frame.Batches = append(frame.Batches, sb)
-				}
-			}
-			for _, cu := range cursors {
-				if cu.GetClientId() != id {
-					frame.Cursors = append(frame.Cursors, cu)
-				}
-			}
-			if len(frame.Batches) > 0 || len(frame.Acks) > 0 || len(frame.Cursors) > 0 {
-				b.deliver(c, &pb.ServerMessage{Msg: &pb.ServerMessage_Frame{Frame: frame}})
-			}
+	enterCache := map[string][]byte{}
+	for id, c := range b.clients {
+		if !joining[c] {
+			b.sendFrame(id, c, batches, moved, enterCache)
 		}
-		clear(b.outAcks)
 	}
+	clear(b.outAcks)
+	b.onlineChanged = false
 
-	if len(b.joining) > 0 {
-		objects := b.doc.Snapshot()
-		for _, c := range b.joining {
-			b.deliver(c, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
-				ProtocolVersion: protocol.Version,
-				NodeId:          b.cfg.NodeID,
-				ServerTimeMs:    b.cfg.Now().UnixMilli(),
-				Seq:             b.seq,
-				Objects:         objects,
-				LastClientSeq:   b.lastClientSeq[c.ClientID()],
-			}}})
-		}
-		b.joining = b.joining[:0]
+	for _, c := range b.joining {
+		c.refs, c.evaluatedUpTo, c.moves = c.refs[:0], 0, map[string]bool{} // the Welcome covers this tick
+		b.deliver(c.conn, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
+			ProtocolVersion: protocol.Version,
+			NodeId:          b.cfg.NodeID,
+			ServerTimeMs:    b.cfg.Now().UnixMilli(),
+			Seq:             b.seq,
+			Objects:         b.objectsIn(c.view, c.lod),
+			LastClientSeq:   b.lastClientSeq[c.conn.ClientID()],
+			Online:          uint32(len(b.clients)),
+		}}})
+		c.presenceStale = true // cursors reach a joiner on its next frame
 	}
+	b.joining = b.joining[:0]
+
+	// Server-side sync latency: batch received until its frames are queued.
+	done := time.Now()
+	for _, p := range b.uncommitted {
+		b.metrics.SyncServerLatency.Observe(done.Sub(p.received).Seconds())
+	}
+	b.uncommitted = b.uncommitted[:0]
 	b.metrics.TickDuration.Observe(time.Since(start).Seconds())
 	return nil
 }
 
-// takeCursorUpdates returns cursors that moved or left since the last tick.
-// Moves from clients no longer on the board are dropped, so a late cursor
-// message can never leave a ghost behind.
-func (b *Board) takeCursorUpdates() []*pb.CursorUpdate {
+// sendFrame assembles and queues one client's frame for this tick.
+func (b *Board) sendFrame(id uint64, c *clientState, batches []encodedBatch, moved map[uint64]bool, enterCache map[string][]byte) {
+	fb := newFrameBuilder(b.frameBuf)
+	defer func() { b.frameBuf = fb.body }()
+
+	b.judge(id, c)
+	var sel [][]byte
+	for k := 0; k < len(c.refs); {
+		bi := c.refs[k].batch
+		sel = sel[:0]
+		for ; k < len(c.refs) && c.refs[k].batch == bi; k++ {
+			entry := batches[bi].ops[c.refs[k].op]
+			if c.refs[k].lod {
+				entry = batches[bi].lodOps[c.refs[k].op]
+			}
+			if entry != nil {
+				sel = append(sel, entry)
+			}
+		}
+		if len(sel) > 0 {
+			fb.batch(batches[bi].header, sel)
+		}
+	}
+	c.refs, c.evaluatedUpTo = c.refs[:0], 0
+	for _, a := range b.outAcks[id] {
+		fb.message(fieldFrameAcks, a)
+	}
+	if len(moved) > 0 || c.presenceStale {
+		for _, u := range b.cursorsFor(id, c, moved) {
+			fb.message(fieldFrameCursors, u)
+		}
+		c.presenceStale = false
+	}
+	if len(c.moves) > 0 {
+		for _, oid := range sortedMoves(c.moves) {
+			if c.moves[oid] {
+				fb.raw(b.enterEntry(enterCache, oid, c.lod))
+			} else {
+				fb.leave(oid)
+			}
+		}
+		clear(c.moves)
+	}
+	if b.onlineChanged {
+		fb.online(uint32(len(b.clients)))
+	}
+	if !fb.empty {
+		fb.seq(b.seq)
+		b.deliverBytes(c.conn, fb.serverMessage())
+	}
+}
+
+// enterEntry returns an object's full (or LOD) state as a Frame.objects
+// entry, encoding it at most once per tick.
+func (b *Board) enterEntry(cache map[string][]byte, id string, lod bool) []byte {
+	key := id
+	if lod {
+		key = "lod:" + id
+	}
+	if e, ok := cache[key]; ok {
+		return e
+	}
+	e := appendMessage(nil, fieldFrameObjects, b.objectState(id, lod))
+	cache[key] = e
+	return e
+}
+
+// updateCursors moves this tick's cursors in the cursor grid, drops those of
+// departed clients, and returns the clients whose cursor changed. Moves from
+// clients no longer on the board are ignored, so a cursor message racing a
+// departure cannot leave a ghost behind.
+func (b *Board) updateCursors() map[uint64]bool {
+	// Take the map under the lock; connection goroutines keep writing to its
+	// replacement. (Never touch the shared map outside the lock.)
 	b.cursorMu.Lock()
-	moved := b.cursorMoved
-	if len(moved) > 0 {
+	positions := b.cursorMoved
+	if len(positions) > 0 {
 		b.cursorMoved = map[uint64][2]float64{}
+	} else {
+		positions = nil
 	}
 	b.cursorMu.Unlock()
 
-	var out []*pb.CursorUpdate
+	moved := map[uint64]bool{}
 	for _, id := range b.goneCursors {
-		if _, back := b.clients[id]; !back {
-			out = append(out, &pb.CursorUpdate{ClientId: id, Gone: true})
+		delete(positions, id)
+		if _, back := b.clients[id]; back {
+			continue
 		}
-		delete(moved, id)
+		key := strconv.FormatUint(id, 36)
+		if _, had := b.cursorIDs[key]; had {
+			b.cursorGrid.Remove(key)
+			delete(b.cursorIDs, key)
+			moved[id] = true
+		}
 	}
 	b.goneCursors = b.goneCursors[:0]
-	ids := make([]uint64, 0, len(moved))
-	for id := range moved {
-		if _, ok := b.clients[id]; ok {
-			ids = append(ids, id)
+	for id, p := range positions {
+		if _, ok := b.clients[id]; !ok {
+			continue
 		}
+		key := strconv.FormatUint(id, 36)
+		b.cursorIDs[key] = id
+		b.cursorGrid.Set(key, spatial.Rect{X: p[0], Y: p[1]})
+		moved[id] = true
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	for _, id := range ids {
-		p := moved[id]
-		out = append(out, &pb.CursorUpdate{ClientId: id, X: p[0], Y: p[1]})
-	}
-	return out
+	return moved
 }
 
 func (b *Board) deliver(c Conn, msg *pb.ServerMessage) {
@@ -553,11 +690,17 @@ func (b *Board) deliver(c Conn, msg *pb.ServerMessage) {
 		b.log.Error("marshal server message", "err", err)
 		return
 	}
+	b.deliverBytes(c, data)
+}
+
+func (b *Board) deliverBytes(c Conn, data []byte) {
 	if !c.Send(data) {
 		b.metrics.ClientsKicked.WithLabelValues("slow_consumer").Inc()
 		c.Kick(KickSlow)
 		b.remove(c)
+		return
 	}
+	b.metrics.FanoutBytes.Add(float64(len(data)))
 }
 
 // buildSnapshot captures committed state; call it only right after flush.
@@ -648,7 +791,7 @@ func (b *Board) fail(stage string, err error) {
 
 func (b *Board) kickAll(reason KickReason) {
 	for _, c := range b.clients {
-		c.Kick(reason)
+		c.conn.Kick(reason)
 	}
 	clear(b.clients)
 	b.joining = nil
@@ -659,4 +802,13 @@ func (b *Board) finish(err error) {
 	b.onClose(b)
 	b.err = err
 	close(b.done)
+}
+
+func sortedMoves(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

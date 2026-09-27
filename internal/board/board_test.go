@@ -61,13 +61,24 @@ func (c *fakeConn) kickedFor() *KickReason {
 
 func (c *fakeConn) next(t *testing.T) *pb.ServerMessage {
 	t.Helper()
-	select {
-	case m := <-c.msgs:
-		return m
-	case <-time.After(3 * time.Second):
-		t.Fatalf("client %d: no message", c.id)
-		return nil
+	for {
+		select {
+		case m := <-c.msgs:
+			if !onlineOnly(m) {
+				return m
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("client %d: no message", c.id)
+			return nil
+		}
 	}
+}
+
+// onlineOnly reports frames that only update the online count, which the
+// tests below ignore.
+func onlineOnly(m *pb.ServerMessage) bool {
+	f := m.GetFrame()
+	return f != nil && len(f.Batches)+len(f.Acks)+len(f.Cursors)+len(f.Objects)+len(f.Leave) == 0
 }
 
 func (c *fakeConn) frame(t *testing.T) *pb.Frame {
@@ -81,10 +92,16 @@ func (c *fakeConn) frame(t *testing.T) *pb.Frame {
 
 func (c *fakeConn) quiet(t *testing.T) {
 	t.Helper()
-	select {
-	case m := <-c.msgs:
-		t.Fatalf("client %d: unexpected message %v", c.id, m)
-	case <-time.After(50 * time.Millisecond):
+	deadline := time.After(50 * time.Millisecond)
+	for {
+		select {
+		case m := <-c.msgs:
+			if !onlineOnly(m) {
+				t.Fatalf("client %d: unexpected message %v", c.id, m)
+			}
+		case <-deadline:
+			return
+		}
 	}
 }
 
@@ -108,7 +125,7 @@ func newEnv(t *testing.T, mut ...func(*Config)) *env {
 
 func (e *env) join(t *testing.T, boardID string, c *fakeConn) (*Board, *pb.Welcome) {
 	t.Helper()
-	b, err := e.reg.Join(context.Background(), boardID, c)
+	b, err := e.reg.Join(context.Background(), boardID, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,16 +167,27 @@ func TestBatchIsAckedToSenderAndBroadcastToOthers(t *testing.T) {
 
 	submit(t, bd, 10, batch(1, now.UnixMilli(), create("a:1", 5)))
 
+	// A new object reaches everyone as a full object (the creator too, since
+	// it now holds it), not as an op.
 	fa := a.frame(t)
-	if len(fa.Batches) != 0 || len(fa.Acks) != 1 || fa.Acks[0].GetSeq() != 1 || fa.Acks[0].GetRejected() {
+	if len(fa.Batches) != 0 || len(fa.Acks) != 1 || fa.Acks[0].GetSeq() != 1 || fa.Acks[0].GetRejected() || len(fa.Objects) != 1 || fa.Seq != 1 {
 		t.Fatalf("sender frame = %v", fa)
 	}
 	if got := fa.Acks[0].GetStamp(); got.GetClientId() != 10 || got.GetWallMs() != now.UnixMilli() {
 		t.Fatalf("ack stamp = %v", got)
 	}
 	fb := b.frame(t)
-	if len(fb.Batches) != 1 || fb.Batches[0].GetSeq() != 1 || len(fb.Acks) != 0 {
+	if len(fb.Batches) != 0 || len(fb.Objects) != 1 || fb.Objects[0].GetId() != "a:1" || len(fb.Acks) != 0 {
 		t.Fatalf("receiver frame = %v", fb)
+	}
+
+	// Later edits to an object others hold travel as ops.
+	submit(t, bd, 10, batch(2, now.UnixMilli()+1, move("a:1", 9)))
+	if fa := a.frame(t); len(fa.Batches) != 0 || len(fa.Objects) != 0 || len(fa.Acks) != 1 {
+		t.Fatalf("sender frame = %v, want just the ack", fa)
+	}
+	if fb := b.frame(t); len(fb.Batches) != 1 || fb.Batches[0].GetSeq() != 2 || fb.Batches[0].GetOps()[0].GetProps().GetX() != 9 {
+		t.Fatalf("receiver frame = %v, want the move", fb)
 	}
 }
 
@@ -174,17 +202,14 @@ func TestBatchesInOneTickShareAFrameInSeqOrder(t *testing.T) {
 	submit(t, bd, 11, batch(1, now.UnixMilli(), create("b:1", 2)))
 	submit(t, bd, 10, batch(2, now.UnixMilli()+1, move("b:1", 3)))
 
+	// One frame: both new objects in full, and the move (made after b:1
+	// existed) as an op.
 	f := obs.frame(t)
-	if len(f.Batches) != 3 {
-		t.Fatalf("observer got %d batches in one frame, want 3", len(f.Batches))
+	if len(f.Objects) != 2 || len(f.Batches) != 1 || f.Batches[0].GetSeq() != 3 || f.Seq != 3 {
+		t.Fatalf("observer frame = %v", f)
 	}
-	for i, sb := range f.Batches {
-		if sb.GetSeq() != uint64(i+1) {
-			t.Fatalf("batch %d has seq %d", i, sb.GetSeq())
-		}
-	}
-	if fa := a.frame(t); len(fa.Acks) != 2 || len(fa.Batches) != 1 {
-		t.Fatalf("a's frame = %v, want 2 acks and b's batch", fa)
+	if fa := a.frame(t); len(fa.Acks) != 2 || len(fa.Batches) != 0 || len(fa.Objects) != 2 {
+		t.Fatalf("a's frame = %v, want 2 acks and both objects", fa)
 	}
 }
 
@@ -400,7 +425,7 @@ func TestCommitFailureDropsClientsWithoutAcking(t *testing.T) {
 func TestLoadFailureIsReturnedToJoiner(t *testing.T) {
 	e := newEnv(t)
 	e.store.FailLoad = errors.New("database down")
-	_, err := e.reg.Join(context.Background(), "x", newConn(10))
+	_, err := e.reg.Join(context.Background(), "x", newConn(10), nil)
 	if err == nil || !strings.Contains(err.Error(), "database down") {
 		t.Fatalf("err = %v, want the load error", err)
 	}
@@ -412,7 +437,7 @@ func TestLogGapFailsLoad(t *testing.T) {
 		LogEntry{Seq: 1, ClientID: 10, ClientSeq: 1, Stamp: &pb.Stamp{WallMs: 1}, Ops: []*pb.Op{create("a:1", 1)}},
 		LogEntry{Seq: 3, ClientID: 10, ClientSeq: 2, Stamp: &pb.Stamp{WallMs: 2}, Ops: []*pb.Op{move("a:1", 2)}},
 	)
-	if _, err := e.reg.Join(context.Background(), "x", newConn(10)); err == nil || !strings.Contains(err.Error(), "log gap") {
+	if _, err := e.reg.Join(context.Background(), "x", newConn(10), nil); err == nil || !strings.Contains(err.Error(), "log gap") {
 		t.Fatalf("err = %v, want log gap", err)
 	}
 }
@@ -452,7 +477,7 @@ func TestPeriodicSnapshots(t *testing.T) {
 func TestRegistryCloseCommitsAndSnapshots(t *testing.T) {
 	e := newEnv(t, func(c *Config) { c.Tick = time.Hour }) // only Close flushes
 	a := newConn(10)
-	bd, err := e.reg.Join(context.Background(), "x", a)
+	bd, err := e.reg.Join(context.Background(), "x", a, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

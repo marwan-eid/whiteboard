@@ -103,6 +103,20 @@ func helloAs(version uint32, board string, clientID uint64) *pb.ClientMessage {
 	}}}
 }
 
+// recvFrame returns the next frame, skipping ones that only update the online count.
+func recvFrame(t *testing.T, c *websocket.Conn) *pb.Frame {
+	t.Helper()
+	for {
+		f := recv(t, c).GetFrame()
+		if f == nil {
+			t.Fatal("expected a frame")
+		}
+		if len(f.Batches)+len(f.Acks)+len(f.Cursors)+len(f.Objects)+len(f.Leave) > 0 {
+			return f
+		}
+	}
+}
+
 // join handshakes and returns the Welcome.
 func join(t *testing.T, c *websocket.Conn, msg *pb.ClientMessage) *pb.Welcome {
 	t.Helper()
@@ -165,16 +179,18 @@ func TestBatchRoundTrip(t *testing.T) {
 		Ops:       []*pb.Op{op},
 	}}})
 
-	ack := recv(t, a).GetFrame()
+	ack := recvFrame(t, a)
 	if len(ack.GetAcks()) != 1 || ack.GetAcks()[0].GetSeq() != 1 || len(ack.GetBatches()) != 0 {
 		t.Fatalf("sender frame = %v, want one ack for seq 1 and no batches", ack)
 	}
-	got := recv(t, b).GetFrame()
-	if len(got.GetBatches()) != 1 || got.GetBatches()[0].GetSeq() != 1 || got.GetBatches()[0].GetStamp().GetClientId() != 10 {
-		t.Fatalf("receiver frame = %v, want batch seq 1 from client 10", got)
+	// The new object reaches the other client in full, with its stamps.
+	got := recvFrame(t, b)
+	if len(got.GetObjects()) != 1 || got.GetSeq() != 1 {
+		t.Fatalf("receiver frame = %v, want the new object", got)
 	}
-	if !proto.Equal(got.GetBatches()[0].GetOps()[0], op) {
-		t.Fatalf("op changed in transit: %v", got.GetBatches()[0].GetOps()[0])
+	obj := got.GetObjects()[0]
+	if obj.GetId() != "a:1" || !proto.Equal(obj.GetProps(), op.GetProps()) || obj.GetStamps()[0].GetStamp().GetClientId() != 10 {
+		t.Fatalf("object changed in transit: %v", obj)
 	}
 }
 

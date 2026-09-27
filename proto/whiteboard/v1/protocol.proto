@@ -15,6 +15,7 @@ message ClientMessage {
     TimePing time_ping = 2;
     OpBatch op_batch = 3;
     Cursor cursor = 4;
+    Viewport viewport = 5;
   }
 }
 
@@ -34,18 +35,23 @@ message Hello {
   // Random per client session, in [1, 2^53). Objects this client creates
   // have ids prefixed with its base-36 form (see ObjectIdPrefix).
   uint64 client_id = 3;
+  // The region to receive; unset means the whole board.
+  Viewport viewport = 4;
 }
 
 message Welcome {
   uint32 protocol_version = 1;
   string node_id = 2;
   int64 server_time_ms = 3;
-  // The board as of seq. Frames that follow carry batches with higher seqs.
+  // The board as of seq, limited to the Hello viewport. Frames that follow
+  // carry batches with higher seqs.
   uint64 seq = 4;
   repeated ObjectState objects = 5;
   // Highest OpBatch.client_seq already applied for this client_id, so a
   // reconnecting client knows which pending batches to drop and which to resend.
   uint64 last_client_seq = 6;
+  // Clients on the board, including this one.
+  uint32 online = 7;
 }
 
 // Clock-offset and RTT probe. The server echoes t0 and adds its own clock.
@@ -166,8 +172,30 @@ message Ack {
 message Frame {
   repeated SequencedBatch batches = 1;
   repeated Ack acks = 2;
-  // Other clients' cursors that moved or left since the last frame.
+  // Other clients' cursors that moved, or left this client's view, since the last frame.
   repeated CursorUpdate cursors = 3;
+  // Objects that came into this client's viewport (by an edit or by the
+  // viewport moving), in full; merge them like any other state.
+  repeated ObjectState objects = 4;
+  // Clients on the board, including this one; set when it changed.
+  optional uint32 online = 5;
+  // The board seq as of this frame; the client has now seen every change up
+  // to it that concerns its viewport.
+  uint64 seq = 6;
+  // Objects that left this client's viewport (or were deleted); drop them.
+  // The server decides what each client holds; clients never evict on their own.
+  repeated string leave = 7;
+}
+
+// The board region a client receives: its visible area plus a margin.
+// The server sends edits only for objects in it, and when lod is set only
+// the properties needed to draw boxes (for zoomed-out views).
+message Viewport {
+  double x = 1;
+  double y = 2;
+  double w = 3;
+  double h = 4;
+  bool lod = 5;
 }
 
 // Presence: the sender's pointer in board coordinates. Not persisted.

@@ -126,10 +126,12 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "invalid board id")
 	case !protocol.ValidClientID(hello.GetClientId()):
 		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "invalid client id")
+	case hello.Viewport != nil && !validViewport(hello.GetViewport()):
+		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "invalid viewport")
 	}
 
 	conn := &clientConn{id: hello.GetClientId(), ws: c, send: make(chan []byte, g.cfg.SendQueue), writeTimeout: g.cfg.WriteTimeout}
-	b, err := g.boards.Join(ctx, hello.GetBoardId(), conn)
+	b, err := g.boards.Join(ctx, hello.GetBoardId(), conn, hello.GetViewport())
 	if err != nil {
 		// Usually the board failed to load (database down); the client retries with backoff.
 		_ = c.Close(websocket.StatusTryAgainLater, "board unavailable")
@@ -173,6 +175,13 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 			}
 		case *pb.ClientMessage_OpBatch:
 			if err := b.Submit(ctx, conn.id, m.OpBatch); err != nil {
+				return err
+			}
+		case *pb.ClientMessage_Viewport:
+			if !validViewport(m.Viewport) {
+				return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "invalid viewport")
+			}
+			if err := b.SetViewport(ctx, conn, m.Viewport); err != nil {
 				return err
 			}
 		default:
@@ -241,9 +250,19 @@ func messageType(msg *pb.ClientMessage) string {
 		return "op_batch"
 	case *pb.ClientMessage_Cursor:
 		return "cursor"
+	case *pb.ClientMessage_Viewport:
+		return "viewport"
 	default:
 		return "unknown"
 	}
+}
+
+// validViewport allows rectangles up to 4x the coordinate range per side, so
+// a client can ask for everything.
+func validViewport(v *pb.Viewport) bool {
+	size := func(s float64) bool { return !math.IsNaN(s) && s >= 0 && s <= 4*protocol.MaxCoord }
+	pos := func(p float64) bool { return !math.IsNaN(p) && math.Abs(p) <= 2*protocol.MaxCoord }
+	return pos(v.GetX()) && pos(v.GetY()) && size(v.GetW()) && size(v.GetH())
 }
 
 func validCoord(v float64) bool {

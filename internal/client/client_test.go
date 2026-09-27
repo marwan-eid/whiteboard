@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,9 +61,22 @@ func startServerWith(t *testing.T, st board.Store) *server {
 	return &server{url: "ws" + strings.TrimPrefix(srv.URL, "http"), boards: boards, metrics: m}
 }
 
+var traces sync.Map // client id -> *traceLog
+
+type traceLog struct {
+	mu    sync.Mutex
+	lines []string
+}
+
 func (s *server) client(t *testing.T, id uint64) *client.Client {
 	t.Helper()
-	c := client.New(client.Config{URL: s.url, BoardID: "b", ClientID: id, Reconnect: true})
+	tl := &traceLog{}
+	traces.Store(id, tl)
+	c := client.New(client.Config{URL: s.url, BoardID: "b", ClientID: id, Reconnect: true, Trace: func(line string) {
+		tl.mu.Lock()
+		defer tl.mu.Unlock()
+		tl.lines = append(tl.lines, time.Now().Format("15:04:05.000 ")+line)
+	}})
 	t.Cleanup(c.Close)
 	return c
 }
@@ -84,12 +98,14 @@ func connect(t *testing.T, cs ...*client.Client) {
 func (s *server) settle(t *testing.T, cs ...*client.Client) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
+	var lastErr error
 	for ; ; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			for _, c := range cs {
 				t.Logf("client %d: %+v", c.ID(), c.Stats())
 			}
-			t.Fatal("clients did not settle")
+			dumpTraces(t, lastErr)
+			t.Fatalf("clients did not settle: %v", lastErr)
 		}
 		b := s.boards.Lookup("b")
 		if b == nil {
@@ -99,27 +115,19 @@ func (s *server) settle(t *testing.T, cs ...*client.Client) {
 		if err != nil {
 			continue
 		}
-		done := true
+		lastErr = nil
 		for _, c := range cs {
-			st := c.Stats()
-			if !st.Connected || st.Pending > 0 || st.ServerSeq != snap.Seq {
-				done = false
+			if st := c.Stats(); !st.Connected || st.Pending > 0 {
+				lastErr = fmt.Errorf("client %d not idle: %+v", c.ID(), st)
+				break
+			}
+			// A client holds exactly the visible objects in its viewport.
+			if err := matches(c, snap.Objects); err != nil {
+				lastErr = err
+				break
 			}
 		}
-		if done {
-			want, err := doc.FromSnapshot(snap.Objects)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, c := range cs {
-				got, err := doc.FromSnapshot(c.Snapshot())
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !doc.Equal(got, want) {
-					t.Fatalf("client %d diverged from server at seq %d:\n client %v\n server %v", c.ID(), snap.Seq, c.Snapshot(), snap.Objects)
-				}
-			}
+		if lastErr == nil {
 			return
 		}
 	}
@@ -220,7 +228,7 @@ func TestLateJoinerGetsCurrentState(t *testing.T) {
 // drop and they go offline; at the end every replica equals the server.
 func TestRandomizedConvergence(t *testing.T) {
 	forSeeds(t, 8, func(t *testing.T, seed uint64) {
-		runRandomized(t, seed, startServer(t), false)
+		runRandomized(t, seed, startServer(t), false, false)
 	})
 }
 
@@ -228,7 +236,7 @@ func TestRandomizedConvergence(t *testing.T) {
 // not committed) and reloads from the store. Nothing acked may be lost.
 func TestRandomizedConvergenceWithCrashes(t *testing.T) {
 	forSeeds(t, 8, func(t *testing.T, seed uint64) {
-		runRandomized(t, seed, startServer(t), true)
+		runRandomized(t, seed, startServer(t), true, false)
 	})
 }
 
@@ -261,7 +269,7 @@ func TestRandomizedConvergenceWithCrashesPostgres(t *testing.T) {
 			}
 			return out
 		}
-		runRandomized(t, seed, s, true)
+		runRandomized(t, seed, s, true, false)
 	})
 }
 
@@ -283,12 +291,15 @@ func forSeeds(t *testing.T, n int, fn func(t *testing.T, seed uint64)) {
 	}
 }
 
-func runRandomized(t *testing.T, seed uint64, s *server, crashes bool) {
+func runRandomized(t *testing.T, seed uint64, s *server, crashes, viewports bool) {
 	const nClients, actionsPerClient = 5, 60
 
 	clients := make([]*client.Client, nClients)
 	for i := range clients {
 		clients[i] = s.client(t, uint64(100+i))
+		if viewports {
+			clients[i].SetViewport(randomViewport(rand.New(rand.NewPCG(seed, uint64(1000+i)))))
+		}
 	}
 	connect(t, clients...)
 
@@ -329,6 +340,8 @@ func runRandomized(t *testing.T, seed uint64, s *server, crashes bool) {
 			own := []string{}
 			for range actionsPerClient {
 				switch r := rng.IntN(100); {
+				case viewports && r >= 88:
+					c.SetViewport(randomViewport(rng))
 				case r < 3:
 					c.Drop()
 				case r < 6:
@@ -402,5 +415,86 @@ func TestCursorsArePropagated(t *testing.T) {
 			t.Fatal("departed cursor never removed")
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// matches reports whether c holds exactly the server's visible objects in its viewport.
+func matches(c *client.Client, server []*pb.ObjectState) error {
+	full, err := doc.FromSnapshot(server)
+	if err != nil {
+		return err
+	}
+	want := doc.New()
+	for _, s := range server {
+		if client.InView(full.Get(s.GetId()), c.Viewport()) {
+			want.MergeState(s)
+		}
+	}
+	got, err := doc.FromSnapshot(c.Snapshot())
+	if err != nil {
+		return err
+	}
+	if doc.Equal(got, want) {
+		return nil
+	}
+	var diff []string
+	for _, s := range want.Snapshot() {
+		if g := got.Get(s.GetId()); g == nil {
+			diff = append(diff, fmt.Sprintf("missing %s %v", s.GetId(), s.GetProps()))
+		} else if !proto.Equal(g.State(), s) {
+			diff = append(diff, fmt.Sprintf("differs %s: have %v want %v", s.GetId(), g.State(), s))
+		}
+	}
+	for _, s := range got.Snapshot() {
+		if want.Get(s.GetId()) == nil {
+			diff = append(diff, fmt.Sprintf("extra %s %v", s.GetId(), s.GetProps()))
+		}
+	}
+	return fmt.Errorf("client %d (viewport %v) diverged:\n  %s", c.ID(), c.Viewport(), strings.Join(diff, "\n  "))
+}
+
+// randomViewport covers part of the 0..500 area objects move in; sometimes
+// the whole board.
+func randomViewport(rng *rand.Rand) *pb.Viewport {
+	if rng.IntN(5) == 0 {
+		return nil
+	}
+	return &pb.Viewport{X: float64(rng.IntN(400)) - 50, Y: float64(rng.IntN(400)) - 50, W: float64(50 + rng.IntN(250)), H: float64(50 + rng.IntN(250))}
+}
+
+// Clients watch different, changing parts of the board while edits move
+// objects across their edges; each must end up holding exactly the server's
+// objects in its viewport.
+func TestRandomizedConvergenceWithViewports(t *testing.T) {
+	forSeeds(t, 10, func(t *testing.T, seed uint64) {
+		runRandomized(t, seed, startServer(t), false, true)
+	})
+}
+
+func TestRandomizedConvergenceWithViewportsAndCrashes(t *testing.T) {
+	forSeeds(t, 6, func(t *testing.T, seed uint64) {
+		runRandomized(t, seed, startServer(t), true, true)
+	})
+}
+
+// dumpTraces logs each client's sync events that mention an object named in err.
+func dumpTraces(t *testing.T, err error) {
+	if err == nil {
+		return
+	}
+	ids := regexp.MustCompile(`(?:missing|differs|extra) ([0-9a-z]+:[0-9a-z]+)`).FindAllStringSubmatch(err.Error(), -1)
+	for _, m := range ids {
+		id := m[1]
+		traces.Range(func(k, v any) bool {
+			tl := v.(*traceLog)
+			tl.mu.Lock()
+			defer tl.mu.Unlock()
+			for _, line := range tl.lines {
+				if strings.Contains(line, `"`+id+`"`) || strings.HasPrefix(line[13:], "welcome") {
+					t.Logf("client %d: %.600s", k, line)
+				}
+			}
+			return true
+		})
 	}
 }

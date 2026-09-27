@@ -120,6 +120,41 @@ func (d *Doc) ApplyBatch(ops []*pb.Op, st hlc.Stamp) (changed bool) {
 	return changed
 }
 
+// MergeState merges an object's state (as from Object.State, possibly
+// limited to some fields) using its per-field stamps, as if each write had
+// been applied as an op. It reports whether anything changed.
+func (d *Doc) MergeState(s *pb.ObjectState) (changed bool) {
+	for _, fs := range s.GetStamps() {
+		props := proto.CloneOf(s.GetProps())
+		if props == nil {
+			return changed
+		}
+		m := props.ProtoReflect()
+		m.Range(func(fd protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
+			if fs.GetFieldMask()&(1<<fd.Number()) == 0 {
+				m.Clear(fd)
+			}
+			return true
+		})
+		if d.Apply(&pb.Op{Id: s.GetId(), Props: props}, hlc.FromProto(fs.GetStamp())) {
+			changed = true
+		}
+	}
+	return changed
+}
+
+// Delete forgets an object entirely (a client evicting what left its view).
+func (d *Doc) Delete(id string) { delete(d.objects, id) }
+
+// Range calls fn for every object until fn returns false.
+func (d *Doc) Range(fn func(*Object) bool) {
+	for _, o := range d.objects {
+		if !fn(o) {
+			return
+		}
+	}
+}
+
 // Snapshot returns every object in canonical form, sorted by id.
 func (d *Doc) Snapshot() []*pb.ObjectState {
 	ids := make([]string, 0, len(d.objects))

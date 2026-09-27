@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"whiteboard/internal/metrics"
+	pb "whiteboard/internal/pb/whiteboard/v1"
 )
 
 // Registry holds the boards live on this node, loading them on first join.
@@ -28,11 +29,12 @@ func NewRegistry(cfg Config, log *slog.Logger, m *metrics.Metrics) *Registry {
 }
 
 // Join attaches c to the board, loading the board if needed. The board sends
-// the client a Welcome on its next tick.
-func (r *Registry) Join(ctx context.Context, boardID string, c Conn) (*Board, error) {
+// the client a Welcome on its next tick with the objects in viewport (the
+// whole board if nil).
+func (r *Registry) Join(ctx context.Context, boardID string, c Conn, viewport *pb.Viewport) (*Board, error) {
 	for {
 		b := r.get(boardID)
-		err := b.join(ctx, c)
+		err := b.join(ctx, c, viewport)
 		if errors.Is(err, errClosed) {
 			continue // raced with the board unloading; load it again
 		}

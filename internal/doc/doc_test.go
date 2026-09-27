@@ -263,3 +263,22 @@ func indexes(n int) []int {
 	}
 	return out
 }
+
+// Merging objects' states into an empty replica, in any grouping, rebuilds it.
+func TestMergeStateRebuildsReplica(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		batches := drawBatches(t)
+		full := New()
+		applyAll(full, batches, indexes(len(batches)))
+
+		// Another replica saw some batches, then receives full states.
+		partial := New()
+		applyAll(partial, batches, rapid.Permutation(indexes(len(batches))).Draw(t, "order")[:rapid.IntRange(0, len(batches)).Draw(t, "cut")])
+		for _, s := range full.Snapshot() {
+			partial.MergeState(s)
+		}
+		if !Equal(full, partial) {
+			t.Fatalf("merge did not converge:\n full %v\n got  %v", full.Snapshot(), partial.Snapshot())
+		}
+	})
+}

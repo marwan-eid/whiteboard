@@ -30,6 +30,11 @@ type Metrics struct {
 	SnapshotFailures  prometheus.Counter
 	// BoardFailures counts boards dropped after an I/O error, by stage (load, commit).
 	BoardFailures *prometheus.CounterVec
+	// FanoutBytes counts frame bytes queued to clients.
+	FanoutBytes prometheus.Counter
+	// SyncServerLatency is from a batch arriving until its frames are queued
+	// (includes waiting for the tick and the commit).
+	SyncServerLatency prometheus.Histogram
 }
 
 func New() *Metrics {
@@ -96,6 +101,15 @@ func New() *Metrics {
 			Name: "board_failures_total",
 			Help: "Boards dropped after an I/O failure, by stage.",
 		}, []string{"stage"}),
+		FanoutBytes: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "fanout_bytes_total",
+			Help: "Frame bytes queued to clients.",
+		}),
+		SyncServerLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "sync_server_latency_seconds",
+			Help:    "From a batch arriving until its frames are queued to other clients.",
+			Buckets: prometheus.ExponentialBuckets(0.001, 1.5, 20), // 1ms .. ~2.2s
+		}),
 	}
 	reg.MustRegister(
 		collectors.NewGoCollector(),
@@ -105,6 +119,7 @@ func New() *Metrics {
 		m.ClientsKicked, m.TickDuration,
 		m.CommitDuration, m.BoardLoadDuration, m.SnapshotDuration,
 		m.SnapshotsWritten, m.SnapshotFailures, m.BoardFailures,
+		m.FanoutBytes, m.SyncServerLatency,
 	)
 	return m
 }
