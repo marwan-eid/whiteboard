@@ -80,6 +80,23 @@ func validateProps(p *pb.ObjectProps) error {
 	if p.Text != nil && len(*p.Text) > protocol.MaxTextBytes {
 		return fmt.Errorf("text longer than %d bytes", protocol.MaxTextBytes)
 	}
+	if len(p.GetPoints()) > protocol.MaxPointsBytes {
+		return fmt.Errorf("points longer than %d bytes", protocol.MaxPointsBytes)
+	}
+	if p.FontSize != nil && !inRange(float64(*p.FontSize), protocol.MinFontSize, protocol.MaxFontSize) {
+		return errors.New("font_size out of range")
+	}
+	for name, b := range map[string]*pb.Binding{"from": p.GetFrom(), "to": p.GetTo()} {
+		if b == nil {
+			continue
+		}
+		if id := b.GetObjectId(); id != "" && !protocol.ValidObjectID(id) {
+			return fmt.Errorf("%s: invalid object id", name)
+		}
+		if !inRange(float64(b.GetAnchorX()), 0, 1) || !inRange(float64(b.GetAnchorY()), 0, 1) {
+			return fmt.Errorf("%s: anchor out of range", name)
+		}
+	}
 	return nil
 }
 

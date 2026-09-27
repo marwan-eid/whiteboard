@@ -8,6 +8,7 @@ Pace: about 20 hours a week, solo. Each week ends with something demoable locall
 | W0 Scaffolding | Done 2026-09-27 | |
 | W1 Sync core | Done 2026-09-27 | Go and TS merges agree on shared vectors. Randomized convergence passes over real sockets with drops and offline periods. A Playwright test covers two browsers syncing. |
 | W2 Durability | Done 2026-09-27 | Group commit before ack; crash-only board failure; snapshots plus log-tail load. Randomized crash tests (in-memory store and Postgres), a real SIGKILL test (Go), and a browser restart test are in CI. |
+| W3 Usable editor | Done 2026-09-27 | Six shape types, arrows attached to shapes, select, marquee, move, resize, pan and zoom, in-place text, undo and redo, live cursors. The client now renders on demand. Browser tests cover every tool. |
 
 ## v1 scope
 1. Unlimited persistent boards. Shapes: rect, ellipse, sticky, text, arrow, freehand.

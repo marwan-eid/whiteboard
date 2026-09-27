@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file whiteboard/v1/protocol.proto.
  */
 export const file_whiteboard_v1_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxIpcBCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAQgUKA21zZyLDAQoNU2VydmVyTWVzc2FnZRIpCgd3ZWxjb21lGAEgASgLMhYud2hpdGVib2FyZC52MS5XZWxjb21lSAASLAoJdGltZV9wb25nGAIgASgLMhcud2hpdGVib2FyZC52MS5UaW1lUG9uZ0gAEisKBWVycm9yGAMgASgLMhoud2hpdGVib2FyZC52MS5TZXJ2ZXJFcnJvckgAEiUKBWZyYW1lGAQgASgLMhQud2hpdGVib2FyZC52MS5GcmFtZUgAQgUKA21zZyJGCgVIZWxsbxIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEhAKCGJvYXJkX2lkGAIgASgJEhEKCWNsaWVudF9pZBgDIAEoBCKfAQoHV2VsY29tZRIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEg8KB25vZGVfaWQYAiABKAkSFgoOc2VydmVyX3RpbWVfbXMYAyABKAMSCwoDc2VxGAQgASgEEisKB29iamVjdHMYBSADKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFN0YXRlEhcKD2xhc3RfY2xpZW50X3NlcRgGIAEoBCIWCghUaW1lUGluZxIKCgJ0MBgBIAEoASIuCghUaW1lUG9uZxIKCgJ0MBgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoAyJGCgtTZXJ2ZXJFcnJvchImCgRjb2RlGAEgASgOMhgud2hpdGVib2FyZC52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSI8CgVTdGFtcBIPCgd3YWxsX21zGAEgASgDEg8KB2NvdW50ZXIYAiABKA0SEQoJY2xpZW50X2lkGAMgASgEItcCCgtPYmplY3RQcm9wcxIrCgR0eXBlGAEgASgOMhgud2hpdGVib2FyZC52MS5TaGFwZVR5cGVIAIgBARIUCgdkZWxldGVkGAIgASgISAGIAQESDgoBeBgDIAEoAUgCiAEBEg4KAXkYBCABKAFIA4gBARIOCgF3GAUgASgBSASIAQESDgoBaBgGIAEoAUgFiAEBEg4KAXoYByABKAlIBogBARIRCgRmaWxsGAggASgNSAeIAQESEwoGc3Ryb2tlGAkgASgNSAiIAQESGQoMc3Ryb2tlX3dpZHRoGAogASgCSAmIAQESEQoEdGV4dBgLIAEoCUgKiAEBQgcKBV90eXBlQgoKCF9kZWxldGVkQgQKAl94QgQKAl95QgQKAl93QgQKAl9oQgQKAl96QgcKBV9maWxsQgkKB19zdHJva2VCDwoNX3N0cm9rZV93aWR0aEIHCgVfdGV4dCI7CgJPcBIKCgJpZBgBIAEoCRIpCgVwcm9wcxgCIAEoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0UHJvcHMiYgoHT3BCYXRjaBISCgpjbGllbnRfc2VxGAEgASgEEiMKBXN0YW1wGAIgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIeCgNvcHMYAyADKAsyES53aGl0ZWJvYXJkLnYxLk9wImIKDlNlcXVlbmNlZEJhdGNoEgsKA3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJtCgNBY2sSEgoKY2xpZW50X3NlcRgBIAEoBBILCgNzZXEYAiABKAQSIwoFc3RhbXAYAyABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhAKCHJlamVjdGVkGAQgASgIEg4KBnJlYXNvbhgFIAEoCSJZCgVGcmFtZRIuCgdiYXRjaGVzGAEgAygLMh0ud2hpdGVib2FyZC52MS5TZXF1ZW5jZWRCYXRjaBIgCgRhY2tzGAIgAygLMhIud2hpdGVib2FyZC52MS5BY2sicAoLT2JqZWN0U3RhdGUSCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzEioKBnN0YW1wcxgDIAMoCzIaLndoaXRlYm9hcmQudjEuRmllbGRTdGFtcHMiRgoLRmllbGRTdGFtcHMSIwoFc3RhbXAYASABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhIKCmZpZWxkX21hc2sYAiABKA0qiAEKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAASGgoWRVJST1JfQ09ERV9CQURfUkVRVUVTVBABEiIKHkVSUk9SX0NPREVfVU5TVVBQT1JURURfVkVSU0lPThACEh8KG0VSUk9SX0NPREVfQ0xJRU5UX0lEX0lOX1VTRRADKq8BCglTaGFwZVR5cGUSGgoWU0hBUEVfVFlQRV9VTlNQRUNJRklFRBAAEhMKD1NIQVBFX1RZUEVfUkVDVBABEhYKElNIQVBFX1RZUEVfRUxMSVBTRRACEhUKEVNIQVBFX1RZUEVfU1RJQ0tZEAMSEwoPU0hBUEVfVFlQRV9URVhUEAQSFAoQU0hBUEVfVFlQRV9BUlJPVxAFEhcKE1NIQVBFX1RZUEVfRlJFRUhBTkQQBkKqAQoRY29tLndoaXRlYm9hcmQudjFCDVByb3RvY29sUHJvdG9QAVoxd2hpdGVib2FyZC9pbnRlcm5hbC9wYi93aGl0ZWJvYXJkL3YxO3doaXRlYm9hcmR2MaICA1dYWKoCDVdoaXRlYm9hcmQuVjHKAg1XaGl0ZWJvYXJkXFYx4gIZV2hpdGVib2FyZFxWMVxHUEJNZXRhZGF0YeoCDldoaXRlYm9hcmQ6OlYxYgZwcm90bzM");
+  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxIsABCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAEicKBmN1cnNvchgEIAEoCzIVLndoaXRlYm9hcmQudjEuQ3Vyc29ySABCBQoDbXNnIsMBCg1TZXJ2ZXJNZXNzYWdlEikKB3dlbGNvbWUYASABKAsyFi53aGl0ZWJvYXJkLnYxLldlbGNvbWVIABIsCgl0aW1lX3BvbmcYAiABKAsyFy53aGl0ZWJvYXJkLnYxLlRpbWVQb25nSAASKwoFZXJyb3IYAyABKAsyGi53aGl0ZWJvYXJkLnYxLlNlcnZlckVycm9ySAASJQoFZnJhbWUYBCABKAsyFC53aGl0ZWJvYXJkLnYxLkZyYW1lSABCBQoDbXNnIkYKBUhlbGxvEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SEAoIYm9hcmRfaWQYAiABKAkSEQoJY2xpZW50X2lkGAMgASgEIp8BCgdXZWxjb21lEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SDwoHbm9kZV9pZBgCIAEoCRIWCg5zZXJ2ZXJfdGltZV9tcxgDIAEoAxILCgNzZXEYBCABKAQSKwoHb2JqZWN0cxgFIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSFwoPbGFzdF9jbGllbnRfc2VxGAYgASgEIhYKCFRpbWVQaW5nEgoKAnQwGAEgASgBIi4KCFRpbWVQb25nEgoKAnQwGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgDIkYKC1NlcnZlckVycm9yEiYKBGNvZGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLkVycm9yQ29kZRIPCgdtZXNzYWdlGAIgASgJIjwKBVN0YW1wEg8KB3dhbGxfbXMYASABKAMSDwoHY291bnRlchgCIAEoDRIRCgljbGllbnRfaWQYAyABKAQigQQKC09iamVjdFByb3BzEisKBHR5cGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLlNoYXBlVHlwZUgAiAEBEhQKB2RlbGV0ZWQYAiABKAhIAYgBARIOCgF4GAMgASgBSAKIAQESDgoBeRgEIAEoAUgDiAEBEg4KAXcYBSABKAFIBIgBARIOCgFoGAYgASgBSAWIAQESDgoBehgHIAEoCUgGiAEBEhEKBGZpbGwYCCABKA1IB4gBARITCgZzdHJva2UYCSABKA1ICIgBARIZCgxzdHJva2Vfd2lkdGgYCiABKAJICYgBARIRCgR0ZXh0GAsgASgJSAqIAQESEwoGcG9pbnRzGAwgASgMSAuIAQESKQoEZnJvbRgNIAEoCzIWLndoaXRlYm9hcmQudjEuQmluZGluZ0gMiAEBEicKAnRvGA4gASgLMhYud2hpdGVib2FyZC52MS5CaW5kaW5nSA2IAQESFgoJZm9udF9zaXplGA8gASgCSA6IAQFCBwoFX3R5cGVCCgoIX2RlbGV0ZWRCBAoCX3hCBAoCX3lCBAoCX3dCBAoCX2hCBAoCX3pCBwoFX2ZpbGxCCQoHX3N0cm9rZUIPCg1fc3Ryb2tlX3dpZHRoQgcKBV90ZXh0QgkKB19wb2ludHNCBwoFX2Zyb21CBQoDX3RvQgwKCl9mb250X3NpemUiQAoHQmluZGluZxIRCglvYmplY3RfaWQYASABKAkSEAoIYW5jaG9yX3gYAiABKAISEAoIYW5jaG9yX3kYAyABKAIiOwoCT3ASCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzImIKB09wQmF0Y2gSEgoKY2xpZW50X3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJiCg5TZXF1ZW5jZWRCYXRjaBILCgNzZXEYASABKAQSIwoFc3RhbXAYAiABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEh4KA29wcxgDIAMoCzIRLndoaXRlYm9hcmQudjEuT3AibQoDQWNrEhIKCmNsaWVudF9zZXEYASABKAQSCwoDc2VxGAIgASgEEiMKBXN0YW1wGAMgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIQCghyZWplY3RlZBgEIAEoCBIOCgZyZWFzb24YBSABKAkihwEKBUZyYW1lEi4KB2JhdGNoZXMYASADKAsyHS53aGl0ZWJvYXJkLnYxLlNlcXVlbmNlZEJhdGNoEiAKBGFja3MYAiADKAsyEi53aGl0ZWJvYXJkLnYxLkFjaxIsCgdjdXJzb3JzGAMgAygLMhsud2hpdGVib2FyZC52MS5DdXJzb3JVcGRhdGUiHgoGQ3Vyc29yEgkKAXgYASABKAESCQoBeRgCIAEoASJFCgxDdXJzb3JVcGRhdGUSEQoJY2xpZW50X2lkGAEgASgEEgkKAXgYAiABKAESCQoBeRgDIAEoARIMCgRnb25lGAQgASgIInAKC09iamVjdFN0YXRlEgoKAmlkGAEgASgJEikKBXByb3BzGAIgASgLMhoud2hpdGVib2FyZC52MS5PYmplY3RQcm9wcxIqCgZzdGFtcHMYAyADKAsyGi53aGl0ZWJvYXJkLnYxLkZpZWxkU3RhbXBzIkYKC0ZpZWxkU3RhbXBzEiMKBXN0YW1wGAEgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBISCgpmaWVsZF9tYXNrGAIgASgNKogBCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEhoKFkVSUk9SX0NPREVfQkFEX1JFUVVFU1QQARIiCh5FUlJPUl9DT0RFX1VOU1VQUE9SVEVEX1ZFUlNJT04QAhIfChtFUlJPUl9DT0RFX0NMSUVOVF9JRF9JTl9VU0UQAyqvAQoJU2hhcGVUeXBlEhoKFlNIQVBFX1RZUEVfVU5TUEVDSUZJRUQQABITCg9TSEFQRV9UWVBFX1JFQ1QQARIWChJTSEFQRV9UWVBFX0VMTElQU0UQAhIVChFTSEFQRV9UWVBFX1NUSUNLWRADEhMKD1NIQVBFX1RZUEVfVEVYVBAEEhQKEFNIQVBFX1RZUEVfQVJST1cQBRIXChNTSEFQRV9UWVBFX0ZSRUVIQU5EEAZCqgEKEWNvbS53aGl0ZWJvYXJkLnYxQg1Qcm90b2NvbFByb3RvUAFaMXdoaXRlYm9hcmQvaW50ZXJuYWwvcGIvd2hpdGVib2FyZC92MTt3aGl0ZWJvYXJkdjGiAgNXWFiqAg1XaGl0ZWJvYXJkLlYxygINV2hpdGVib2FyZFxWMeICGVdoaXRlYm9hcmRcVjFcR1BCTWV0YWRhdGHqAg5XaGl0ZWJvYXJkOjpWMWIGcHJvdG8z");
 
 /**
  * @generated from message whiteboard.v1.ClientMessage
@@ -37,6 +37,12 @@ export type ClientMessage = Message<"whiteboard.v1.ClientMessage"> & {
      */
     value: OpBatch;
     case: "opBatch";
+  } | {
+    /**
+     * @generated from field: whiteboard.v1.Cursor cursor = 4;
+     */
+    value: Cursor;
+    case: "cursor";
   } | { case: undefined; value?: undefined };
 };
 
@@ -325,6 +331,31 @@ export type ObjectProps = Message<"whiteboard.v1.ObjectProps"> & {
    * @generated from field: optional string text = 11;
    */
   text?: string | undefined;
+
+  /**
+   * Freehand strokes and arrows: points relative to (x, y), as zigzag-varint
+   * deltas of integer (dx, dy) pairs (see web/src/canvas/geometry.ts).
+   *
+   * @generated from field: optional bytes points = 12;
+   */
+  points?: Uint8Array | undefined;
+
+  /**
+   * Arrow ends attached to other objects; an empty object_id means unattached.
+   *
+   * @generated from field: optional whiteboard.v1.Binding from = 13;
+   */
+  from?: Binding | undefined;
+
+  /**
+   * @generated from field: optional whiteboard.v1.Binding to = 14;
+   */
+  to?: Binding | undefined;
+
+  /**
+   * @generated from field: optional float font_size = 15;
+   */
+  fontSize?: number | undefined;
 };
 
 /**
@@ -333,6 +364,36 @@ export type ObjectProps = Message<"whiteboard.v1.ObjectProps"> & {
  */
 export const ObjectPropsSchema: GenMessage<ObjectProps> = /*@__PURE__*/
   messageDesc(file_whiteboard_v1_protocol, 8);
+
+/**
+ * Where an arrow end attaches: a point on the target's bounding box, as
+ * fractions of its width and height (0.5, 0.5 is the center).
+ *
+ * @generated from message whiteboard.v1.Binding
+ */
+export type Binding = Message<"whiteboard.v1.Binding"> & {
+  /**
+   * @generated from field: string object_id = 1;
+   */
+  objectId: string;
+
+  /**
+   * @generated from field: float anchor_x = 2;
+   */
+  anchorX: number;
+
+  /**
+   * @generated from field: float anchor_y = 3;
+   */
+  anchorY: number;
+};
+
+/**
+ * Describes the message whiteboard.v1.Binding.
+ * Use `create(BindingSchema)` to create a new message.
+ */
+export const BindingSchema: GenMessage<Binding> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_protocol, 9);
 
 /**
  * Sets every property present in props, all with the batch's stamp.
@@ -357,7 +418,7 @@ export type Op = Message<"whiteboard.v1.Op"> & {
  * Use `create(OpSchema)` to create a new message.
  */
 export const OpSchema: GenMessage<Op> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 9);
+  messageDesc(file_whiteboard_v1_protocol, 10);
 
 /**
  * One user action (e.g. dragging three shapes), applied atomically.
@@ -390,7 +451,7 @@ export type OpBatch = Message<"whiteboard.v1.OpBatch"> & {
  * Use `create(OpBatchSchema)` to create a new message.
  */
 export const OpBatchSchema: GenMessage<OpBatch> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 10);
+  messageDesc(file_whiteboard_v1_protocol, 11);
 
 /**
  * A batch as ordered by the board. stamp.client_id is the origin client.
@@ -419,7 +480,7 @@ export type SequencedBatch = Message<"whiteboard.v1.SequencedBatch"> & {
  * Use `create(SequencedBatchSchema)` to create a new message.
  */
 export const SequencedBatchSchema: GenMessage<SequencedBatch> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 11);
+  messageDesc(file_whiteboard_v1_protocol, 12);
 
 /**
  * @generated from message whiteboard.v1.Ack
@@ -463,7 +524,7 @@ export type Ack = Message<"whiteboard.v1.Ack"> & {
  * Use `create(AckSchema)` to create a new message.
  */
 export const AckSchema: GenMessage<Ack> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 12);
+  messageDesc(file_whiteboard_v1_protocol, 13);
 
 /**
  * Everything a client needs from one board tick: other clients' batches, in
@@ -481,6 +542,13 @@ export type Frame = Message<"whiteboard.v1.Frame"> & {
    * @generated from field: repeated whiteboard.v1.Ack acks = 2;
    */
   acks: Ack[];
+
+  /**
+   * Other clients' cursors that moved or left since the last frame.
+   *
+   * @generated from field: repeated whiteboard.v1.CursorUpdate cursors = 3;
+   */
+  cursors: CursorUpdate[];
 };
 
 /**
@@ -488,7 +556,65 @@ export type Frame = Message<"whiteboard.v1.Frame"> & {
  * Use `create(FrameSchema)` to create a new message.
  */
 export const FrameSchema: GenMessage<Frame> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 13);
+  messageDesc(file_whiteboard_v1_protocol, 14);
+
+/**
+ * Presence: the sender's pointer in board coordinates. Not persisted.
+ *
+ * @generated from message whiteboard.v1.Cursor
+ */
+export type Cursor = Message<"whiteboard.v1.Cursor"> & {
+  /**
+   * @generated from field: double x = 1;
+   */
+  x: number;
+
+  /**
+   * @generated from field: double y = 2;
+   */
+  y: number;
+};
+
+/**
+ * Describes the message whiteboard.v1.Cursor.
+ * Use `create(CursorSchema)` to create a new message.
+ */
+export const CursorSchema: GenMessage<Cursor> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_protocol, 15);
+
+/**
+ * @generated from message whiteboard.v1.CursorUpdate
+ */
+export type CursorUpdate = Message<"whiteboard.v1.CursorUpdate"> & {
+  /**
+   * @generated from field: uint64 client_id = 1;
+   */
+  clientId: bigint;
+
+  /**
+   * @generated from field: double x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: double y = 3;
+   */
+  y: number;
+
+  /**
+   * The client left; remove its cursor.
+   *
+   * @generated from field: bool gone = 4;
+   */
+  gone: boolean;
+};
+
+/**
+ * Describes the message whiteboard.v1.CursorUpdate.
+ * Use `create(CursorUpdateSchema)` to create a new message.
+ */
+export const CursorUpdateSchema: GenMessage<CursorUpdate> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_protocol, 16);
 
 /**
  * @generated from message whiteboard.v1.ObjectState
@@ -515,7 +641,7 @@ export type ObjectState = Message<"whiteboard.v1.ObjectState"> & {
  * Use `create(ObjectStateSchema)` to create a new message.
  */
 export const ObjectStateSchema: GenMessage<ObjectState> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 14);
+  messageDesc(file_whiteboard_v1_protocol, 17);
 
 /**
  * The stamp of every property whose field number's bit is set in field_mask.
@@ -539,7 +665,7 @@ export type FieldStamps = Message<"whiteboard.v1.FieldStamps"> & {
  * Use `create(FieldStampsSchema)` to create a new message.
  */
 export const FieldStampsSchema: GenMessage<FieldStamps> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 15);
+  messageDesc(file_whiteboard_v1_protocol, 18);
 
 /**
  * @generated from enum whiteboard.v1.ErrorCode

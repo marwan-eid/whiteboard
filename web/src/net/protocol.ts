@@ -29,6 +29,10 @@ export function encodeOpBatch(batch: OpBatch): Uint8Array<ArrayBuffer> {
   return encode(create(ClientMessageSchema, { msg: { case: "opBatch", value: batch } }));
 }
 
+export function encodeCursor(x: number, y: number): Uint8Array<ArrayBuffer> {
+  return encode(create(ClientMessageSchema, { msg: { case: "cursor", value: { x, y } } }));
+}
+
 export function decodeServerMessage(data: ArrayBuffer): ServerMessage {
   return fromBinary(ServerMessageSchema, new Uint8Array(data));
 }

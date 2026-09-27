@@ -155,7 +155,7 @@ The schema is [proto/whiteboard/v1/protocol.proto](../proto/whiteboard/v1/protoc
 | Client → server | `Cursor{x, y}` | Presence. | W3 |
 | Client → server | `HistoryAt{seq}` | Request board state at a point in history. | W5 |
 | Server → client | `Welcome{seq, objects, lastClientSeq, serverTime}` | Snapshot for (re)joining. `lastClientSeq` tells a reconnecting client which pending batches the server already applied. | W1 |
-| Server → client | `Frame{batches[], acks[]}` | Per-tick delivery: other clients' batches in seq order, plus acks for this client's own. An ack carries the stamp the batch was applied with, or `rejected`. | W1 |
+| Server → client | `Frame{batches[], acks[], cursors[]}` | Per-tick delivery: other clients' batches in seq order, acks for this client's own, and cursors that moved or left. An ack carries the stamp the batch was applied with, or `rejected`. | W1 (cursors W3) |
 | Server → client | `TimePong{t0, serverTime}` | Clock-offset reply. | W0 |
 | Server → client | `ServerError{code, message}` | Sent before closing; codes that retrying can't fix (`UNSUPPORTED_VERSION`, `BAD_REQUEST`, `CLIENT_ID_IN_USE`) stop reconnection. | W0/W1 |
 | Server → client | `ViewportDiff{enter[], leave[]}` | Objects entering or leaving the client's region. | W4 |
@@ -208,9 +208,11 @@ sequenceDiagram
 
 ### 3.3 Presence (live cursors)
 - **Ephemeral:** cursors are never persisted or sequenced.
-- **Client side:** each client sends at most 15 Hz, with coordinates quantized to integers.
-- **Server side:** per tick, the actor keeps only the latest cursor per user. Each client gets the **K = 30 nearest** cursors within its viewport, plus `othersCount` for the rest.
-- **Wire size:** cursors are sent only if they moved since the last frame, encoded compactly (ids as small integers, positions as int32).
+- **Client side:** each client sends at most 15 Hz. The throttle always sends the latest position last.
+- **Gateway:** drops cursor messages that arrive less than 40 ms after the previous one from the same connection.
+- **Board:** cursor updates skip the actor's inbox. Connection goroutines write the latest position per client into a small mutex-guarded map, so presence traffic can never delay edits.
+- **Per tick:** the actor sends each client the cursors that moved since the last tick (not its own), plus a `gone` entry for clients that left. Moves from clients no longer on the board are dropped, so a late cursor message can't leave a ghost behind.
+- **Planned (W4):** each client gets only the **K = 30 nearest** cursors within its viewport, plus a count of the rest.
 
 ### 3.4 Reconnect and offline
 ```mermaid
@@ -286,6 +288,13 @@ sequenceDiagram
   - Per IP: connections, board creations per hour.
   - Per board: an object cap (200k) and a maximum payload size.
 - **Demo board:** resets nightly from a seed snapshot. Vandalism can also be reverted with restore.
+
+## 3.10 Browser client
+- **Renderer:** PixiJS (WebGL), with one view per object in `(z, id)` order. Frames render **on demand**: a `FrameScheduler` renders once in the next animation frame after the board, camera or overlay changes. An idle board draws nothing. Measured locally under headless software rendering, switching to this took the editor browser tests from 2.0 min to 21 s.
+- **Hit testing:** done in board coordinates by the client, not Pixi's event system, with per-shape tests (ellipse equation, distance to polyline). It is O(n) per pointer event for now; W4 adds a spatial grid.
+- **Arrows:** an attached end follows its target and is clipped to the target's outline (rectangle or ellipse). Moving an arrow keeps an attachment only if the target moves with it.
+- **Text:** edited in place in a textarea laid over the canvas. Text objects size their height to their content.
+- **Undo:** gestures (a whole drag or resize) undo as one step. Undo writes the previous values back with a fresh stamp (ADR-0001).
 
 ## 4. Observability
 - **Prometheus metrics:**

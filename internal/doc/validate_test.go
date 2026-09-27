@@ -53,6 +53,11 @@ func TestValidateBatch(t *testing.T) {
 		{"huge stroke", []*pb.Op{set("q:existing", &pb.ObjectProps{StrokeWidth: proto.Float32(5000)})}, "stroke_width out of range"},
 		{"bad z", []*pb.Op{set("q:existing", &pb.ObjectProps{Z: proto.String("a b")})}, "invalid z"},
 		{"long text", []*pb.Op{set("q:existing", &pb.ObjectProps{Text: proto.String(strings.Repeat("x", protocol.MaxTextBytes+1))})}, "text longer"},
+		{"long points", []*pb.Op{set("q:existing", &pb.ObjectProps{Points: make([]byte, protocol.MaxPointsBytes+1)})}, "points longer"},
+		{"tiny font", []*pb.Op{set("q:existing", &pb.ObjectProps{FontSize: proto.Float32(1)})}, "font_size out of range"},
+		{"bad binding id", []*pb.Op{set("q:existing", &pb.ObjectProps{From: &pb.Binding{ObjectId: "BAD ID"}})}, "from: invalid object id"},
+		{"bad anchor", []*pb.Op{set("q:existing", &pb.ObjectProps{To: &pb.Binding{ObjectId: "q:x", AnchorX: 2}})}, "to: anchor out of range"},
+		{"unbinding is fine", []*pb.Op{set("q:existing", &pb.ObjectProps{To: &pb.Binding{}})}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

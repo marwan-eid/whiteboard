@@ -1,5 +1,5 @@
 {
-  "comment": "Merge vectors shared by internal/doc (Go) and web/src/sync/doc.ts. Each case's batches are applied in every order (with duplicates); every order must produce `expected` exactly: same values, same per-field stamps, grouped by stamp ascending. Proto3 JSON. Field numbers for masks: type=1 deleted=2 x=3 y=4 w=5 h=6 z=7 fill=8 stroke=9 strokeWidth=10 text=11.",
+  "comment": "Merge vectors shared by internal/doc (Go) and web/src/sync/doc.ts. Each case's batches are applied in every order (with duplicates); every order must produce `expected` exactly: same values, same per-field stamps, grouped by stamp ascending. Proto3 JSON. Field numbers for masks: type=1 deleted=2 x=3 y=4 w=5 h=6 z=7 fill=8 stroke=9 strokeWidth=10 text=11 points=12 from=13 to=14 fontSize=15.",
   "cases": [
     {
       "name": "later write wins",
@@ -143,6 +143,25 @@
           "stamps": [
             { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 3074 },
             { "stamp": { "wallMs": 200, "counter": 1, "clientId": 1 }, "fieldMask": 128 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bytes and message fields are whole-value LWW; an empty binding detaches",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:r", "props": { "type": "SHAPE_TYPE_ARROW", "points": "AAIE", "from": { "objectId": "1:a", "anchorX": 0.5, "anchorY": 0.5 } } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:r", "props": { "from": {} } }] },
+        { "stamp": { "wallMs": 150, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:r", "props": { "points": "BAg=", "from": { "objectId": "1:b", "anchorX": 1, "anchorY": 0 } } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:r",
+          "props": { "type": "SHAPE_TYPE_ARROW", "points": "BAg=", "from": {} },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 150, "counter": 0, "clientId": 1 }, "fieldMask": 4096 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "fieldMask": 8192 }
           ]
         }
       ]

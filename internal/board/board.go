@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -121,6 +122,11 @@ type Board struct {
 	lastSnapshotSeq uint64
 	lastSnapshotAt  time.Time
 	snapshotting    chan struct{} // closed when the in-flight snapshot write finishes
+	goneCursors     []uint64
+
+	// Written by connection goroutines, drained by the actor each tick.
+	cursorMu    sync.Mutex
+	cursorMoved map[uint64][2]float64
 }
 
 type joinMsg struct {
@@ -167,6 +173,7 @@ func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClo
 		outAcks:        map[uint64][]*pb.Ack{},
 		idleSince:      cfg.Now(),
 		lastSnapshotAt: cfg.Now(),
+		cursorMoved:    map[uint64][2]float64{},
 	}
 	go b.run()
 	return b
@@ -218,6 +225,15 @@ func (b *Board) Leave(c Conn) {
 // Submit hands a client batch to the board. The result arrives as an Ack in a later frame.
 func (b *Board) Submit(ctx context.Context, clientID uint64, batch *pb.OpBatch) error {
 	return b.send(ctx, batchMsg{clientID: clientID, batch: batch})
+}
+
+// SetCursor records a client's pointer position for the next tick. Cursors
+// bypass the actor's inbox so presence traffic never delays edits; only the
+// latest position per client is kept.
+func (b *Board) SetCursor(clientID uint64, x, y float64) {
+	b.cursorMu.Lock()
+	b.cursorMoved[clientID] = [2]float64{x, y}
+	b.cursorMu.Unlock()
 }
 
 // Snapshot returns the current state, including batches not yet committed.
@@ -364,6 +380,7 @@ func (b *Board) remove(c Conn) {
 	}
 	delete(b.clients, id)
 	delete(b.outAcks, id)
+	b.goneCursors = append(b.goneCursors, id)
 	for i, j := range b.joining {
 		if j == c {
 			b.joining = append(b.joining[:i], b.joining[i+1:]...)
@@ -454,8 +471,9 @@ func (b *Board) flush() error {
 	for _, c := range b.joining {
 		joining[c] = true
 	}
+	cursors := b.takeCursorUpdates()
 
-	if len(batches) > 0 || len(b.outAcks) > 0 {
+	if len(batches) > 0 || len(b.outAcks) > 0 || len(cursors) > 0 {
 		for id, c := range b.clients {
 			if joining[c] {
 				continue
@@ -466,7 +484,12 @@ func (b *Board) flush() error {
 					frame.Batches = append(frame.Batches, sb)
 				}
 			}
-			if len(frame.Batches) > 0 || len(frame.Acks) > 0 {
+			for _, cu := range cursors {
+				if cu.GetClientId() != id {
+					frame.Cursors = append(frame.Cursors, cu)
+				}
+			}
+			if len(frame.Batches) > 0 || len(frame.Acks) > 0 || len(frame.Cursors) > 0 {
 				b.deliver(c, &pb.ServerMessage{Msg: &pb.ServerMessage_Frame{Frame: frame}})
 			}
 		}
@@ -489,6 +512,39 @@ func (b *Board) flush() error {
 	}
 	b.metrics.TickDuration.Observe(time.Since(start).Seconds())
 	return nil
+}
+
+// takeCursorUpdates returns cursors that moved or left since the last tick.
+// Moves from clients no longer on the board are dropped, so a late cursor
+// message can never leave a ghost behind.
+func (b *Board) takeCursorUpdates() []*pb.CursorUpdate {
+	b.cursorMu.Lock()
+	moved := b.cursorMoved
+	if len(moved) > 0 {
+		b.cursorMoved = map[uint64][2]float64{}
+	}
+	b.cursorMu.Unlock()
+
+	var out []*pb.CursorUpdate
+	for _, id := range b.goneCursors {
+		if _, back := b.clients[id]; !back {
+			out = append(out, &pb.CursorUpdate{ClientId: id, Gone: true})
+		}
+		delete(moved, id)
+	}
+	b.goneCursors = b.goneCursors[:0]
+	ids := make([]uint64, 0, len(moved))
+	for id := range moved {
+		if _, ok := b.clients[id]; ok {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	for _, id := range ids {
+		p := moved[id]
+		out = append(out, &pb.CursorUpdate{ClientId: id, X: p[0], Y: p[1]})
+	}
+	return out
 }
 
 func (b *Board) deliver(c Conn, msg *pb.ServerMessage) {

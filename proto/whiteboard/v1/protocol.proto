@@ -14,6 +14,7 @@ message ClientMessage {
     Hello hello = 1;
     TimePing time_ping = 2;
     OpBatch op_batch = 3;
+    Cursor cursor = 4;
   }
 }
 
@@ -108,6 +109,21 @@ message ObjectProps {
   optional uint32 stroke = 9;
   optional float stroke_width = 10;
   optional string text = 11;
+  // Freehand strokes and arrows: points relative to (x, y), as zigzag-varint
+  // deltas of integer (dx, dy) pairs (see web/src/canvas/geometry.ts).
+  optional bytes points = 12;
+  // Arrow ends attached to other objects; an empty object_id means unattached.
+  optional Binding from = 13;
+  optional Binding to = 14;
+  optional float font_size = 15;
+}
+
+// Where an arrow end attaches: a point on the target's bounding box, as
+// fractions of its width and height (0.5, 0.5 is the center).
+message Binding {
+  string object_id = 1;
+  float anchor_x = 2;
+  float anchor_y = 3;
 }
 
 // Sets every property present in props, all with the batch's stamp.
@@ -150,6 +166,22 @@ message Ack {
 message Frame {
   repeated SequencedBatch batches = 1;
   repeated Ack acks = 2;
+  // Other clients' cursors that moved or left since the last frame.
+  repeated CursorUpdate cursors = 3;
+}
+
+// Presence: the sender's pointer in board coordinates. Not persisted.
+message Cursor {
+  double x = 1;
+  double y = 2;
+}
+
+message CursorUpdate {
+  uint64 client_id = 1;
+  double x = 2;
+  double y = 3;
+  // The client left; remove its cursor.
+  bool gone = 4;
 }
 
 message ObjectState {

@@ -2,7 +2,7 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-> **Status: early development. W2 (durability) of [the plan](docs/PLAN.md) is done.** Boards sync live between browsers and persist in Postgres; edits survive a server crash. No performance numbers have been measured yet. Targets are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+> **Status: early development. W3 (usable editor) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, and survive a server crash. None of the performance targets has been measured yet; they are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Run it
 
@@ -14,9 +14,16 @@ docker compose up --build
 
 Then open http://localhost:8080 in two browser windows. Open `/b/<any-id>` to join a specific board.
 
-- Double-click empty space to add a shape.
-- Drag a shape to move it.
-- Select a shape and press Delete to remove it.
+| Action | How |
+|---|---|
+| Tools | Toolbar, or keys: V select, H hand, R rectangle, O ellipse, S sticky note, T text, A arrow, P pen |
+| Add a rectangle quickly | Double-click empty space |
+| Edit text | Double-click a sticky note or text, or press Enter; Esc or Ctrl+Enter to finish |
+| Select several | Shift+click, or drag a box on empty space; Ctrl+A for all |
+| Move, resize, delete | Drag; drag a handle; Delete |
+| Attach an arrow | Start or end it on a shape; it follows the shape |
+| Undo, redo | Ctrl+Z, Ctrl+Shift+Z |
+| Pan, zoom | Scroll, or Space+drag, or the hand tool; Ctrl+scroll or pinch to zoom |
 
 ## Develop
 

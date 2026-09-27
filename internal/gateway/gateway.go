@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -31,7 +32,9 @@ type Config struct {
 	// SendQueue is how many outgoing messages may wait per connection before
 	// the client is considered too slow and disconnected.
 	SendQueue int
-	Now       func() time.Time
+	// MinCursorInterval drops cursor updates that arrive faster than this.
+	MinCursorInterval time.Duration
+	Now               func() time.Time
 }
 
 type Gateway struct {
@@ -58,6 +61,9 @@ func New(cfg Config, boards *board.Registry, log *slog.Logger, m *metrics.Metric
 	}
 	if cfg.SendQueue == 0 {
 		cfg.SendQueue = 256
+	}
+	if cfg.MinCursorInterval == 0 {
+		cfg.MinCursorInterval = 40 * time.Millisecond
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -140,12 +146,20 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 		g.writeLoop(writeCtx, c, conn.send)
 	}()
 
+	var lastCursor time.Time
 	for {
 		msg, err := g.read(ctx, c, 0)
 		if err != nil {
 			return err
 		}
 		switch m := msg.Msg.(type) {
+		case *pb.ClientMessage_Cursor:
+			// Clients send at most ~15 Hz; anything faster is dropped, not an error.
+			x, y := m.Cursor.GetX(), m.Cursor.GetY()
+			if now := time.Now(); now.Sub(lastCursor) >= g.cfg.MinCursorInterval && validCoord(x) && validCoord(y) {
+				lastCursor = now
+				b.SetCursor(conn.id, x, y)
+			}
 		case *pb.ClientMessage_TimePing:
 			pong, err := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_TimePong{TimePong: &pb.TimePong{
 				T0:           m.TimePing.GetT0(),
@@ -225,9 +239,15 @@ func messageType(msg *pb.ClientMessage) string {
 		return "time_ping"
 	case *pb.ClientMessage_OpBatch:
 		return "op_batch"
+	case *pb.ClientMessage_Cursor:
+		return "cursor"
 	default:
 		return "unknown"
 	}
+}
+
+func validCoord(v float64) bool {
+	return !math.IsNaN(v) && math.Abs(v) <= protocol.MaxCoord
 }
 
 // clientConn implements board.Conn for one WebSocket.

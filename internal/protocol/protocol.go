@@ -22,6 +22,9 @@ const (
 	MaxCoord       = 1e9
 	MaxSize        = 1e6
 	MaxStrokeWidth = 1_000
+	MaxPointsBytes = 32 << 10
+	MinFontSize    = 4
+	MaxFontSize    = 512
 )
 
 // ValidBoardID reports whether id is 1..MaxBoardIDLen chars of [A-Za-z0-9_-].

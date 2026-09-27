@@ -383,3 +383,24 @@ func randomProps(rng *rand.Rand) *pb.ObjectProps {
 	}
 	return p
 }
+
+func TestCursorsArePropagated(t *testing.T) {
+	s := startServer(t)
+	a, b := s.client(t, 10), s.client(t, 11)
+	connect(t, a, b)
+	a.MoveCursor(12, 34)
+	deadline := time.Now().Add(5 * time.Second)
+	for b.Cursors()[10] != [2]float64{12, 34} {
+		if time.Now().After(deadline) {
+			t.Fatalf("b sees cursors %v", b.Cursors())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	a.Close()
+	for _, ok := b.Cursors()[10]; ok; _, ok = b.Cursors()[10] {
+		if time.Now().After(deadline) {
+			t.Fatal("departed cursor never removed")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}

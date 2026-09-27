@@ -493,3 +493,28 @@ func TestTimeBasedSnapshot(t *testing.T) {
 	submit(t, bd, 10, batch(1, time.Now().UnixMilli(), create("a:1", 1)))
 	waitFor(t, func() bool { return e.store.Snapshots("x") == 1 })
 }
+
+func TestCursorsReachOthersAndDepartureIsAnnounced(t *testing.T) {
+	e := newEnv(t)
+	a, b := newConn(10), newConn(11)
+	bd, _ := e.join(t, "x", a)
+	e.join(t, "x", b)
+
+	bd.SetCursor(10, 1, 2)
+	bd.SetCursor(10, 3, 4) // only the latest position per tick is sent
+	f := b.frame(t)
+	if len(f.Cursors) != 1 || f.Cursors[0].GetClientId() != 10 || f.Cursors[0].GetX() != 3 || f.Cursors[0].GetY() != 4 {
+		t.Fatalf("b's frame cursors = %v", f.Cursors)
+	}
+	a.quiet(t) // nobody is sent their own cursor
+
+	bd.Leave(a)
+	f = b.frame(t)
+	if len(f.Cursors) != 1 || !f.Cursors[0].GetGone() || f.Cursors[0].GetClientId() != 10 {
+		t.Fatalf("departure = %v, want gone for client 10", f.Cursors)
+	}
+
+	// A cursor message racing with the departure must not resurrect it.
+	bd.SetCursor(10, 5, 6)
+	b.quiet(t)
+}

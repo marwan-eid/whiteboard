@@ -2,7 +2,7 @@ import type { Frame, OpBatch, Welcome } from "../gen/whiteboard/v1/protocol_pb";
 import { ErrorCode } from "../gen/whiteboard/v1/protocol_pb";
 import { backoffDelay } from "./backoff";
 import { ClockSync } from "./clock";
-import { decodeServerMessage, encodeHello, encodeOpBatch, encodeTimePing } from "./protocol";
+import { decodeServerMessage, encodeCursor, encodeHello, encodeOpBatch, encodeTimePing } from "./protocol";
 
 export type ConnectionState =
   | { status: "connecting"; attempt: number }
@@ -109,6 +109,13 @@ export class Connection {
   sendBatch(batch: OpBatch): boolean {
     if (!this.socket || !this.welcomed) return false;
     this.socket.send(encodeOpBatch(batch));
+    return true;
+  }
+
+  /** Sends our pointer position if welcomed; false means not sent. */
+  sendCursor(x: number, y: number): boolean {
+    if (!this.socket || !this.welcomed) return false;
+    this.socket.send(encodeCursor(x, y));
     return true;
   }
 

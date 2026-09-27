@@ -1,11 +1,15 @@
 import { Application, Texture, TilingSprite } from "pixi.js";
+import type { Camera } from "./camera";
 
 const GRID_SPACING = 24;
+const GRID_MIN_ZOOM = 0.3;
 
-/** Creates the WebGL stage with an infinite dot-grid background. */
-export async function createStage(host: HTMLElement): Promise<Application> {
+/** Creates the WebGL stage with a dot grid that pans and zooms with the camera. */
+export async function createStage(host: HTMLElement, camera: Camera): Promise<Application> {
   const app = new Application();
   await app.init({
+    // Rendered on demand by FrameScheduler, not every frame.
+    autoStart: false,
     resizeTo: host,
     background: "#f7f7f5",
     antialias: true,
@@ -20,6 +24,13 @@ export async function createStage(host: HTMLElement): Promise<Application> {
     height: app.screen.height,
   });
   app.stage.addChild(grid);
+  const sync = () => {
+    grid.visible = camera.zoom >= GRID_MIN_ZOOM;
+    grid.tileScale.set(camera.zoom);
+    grid.tilePosition.set(-camera.x * camera.zoom, -camera.y * camera.zoom);
+  };
+  camera.subscribe(sync);
+  sync();
   app.renderer.on("resize", (width: number, height: number) => {
     grid.width = width;
     grid.height = height;

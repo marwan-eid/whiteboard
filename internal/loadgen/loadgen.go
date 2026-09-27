@@ -129,12 +129,15 @@ func runClient(ctx context.Context, cfg Config, epoch time.Time) ([]time.Duratio
 		}}}); err != nil {
 			return rtts, fmt.Errorf("send ping: %w", err)
 		}
-		msg, err := read(ctx, c)
-		if err != nil {
-			return rtts, fmt.Errorf("await pong: %w", err)
-		}
-		if msg.GetTimePong() == nil {
-			return rtts, fmt.Errorf("expected pong, got %v", msg)
+		// Frames (other clients' edits and cursors) may arrive before the pong.
+		for {
+			msg, err := read(ctx, c)
+			if err != nil {
+				return rtts, fmt.Errorf("await pong: %w", err)
+			}
+			if msg.GetTimePong() != nil {
+				break
+			}
 		}
 		rtts = append(rtts, time.Since(epoch)-sent)
 

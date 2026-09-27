@@ -1,7 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 
-type Shape = { id: string; x: number; y: number; w: number; h: number };
-
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible());
 const pending = (p: Page) => p.evaluate(() => window.__whiteboard!.pending());
 
@@ -20,7 +18,7 @@ test("two browsers see each other's creates, moves and deletes", async ({ browse
   // A double-clicks empty canvas to create a shape; B sees it.
   await a.mouse.dblclick(400, 300);
   await expect.poll(async () => (await visible(b)).length).toBe(1);
-  const [shape] = (await visible(b)) as [Shape];
+  const shape = (await visible(b))[0]!;
 
   // B drags it 200px right and 100px down; A sees the final position.
   await b.mouse.move(shape.x + 20, shape.y + 20);

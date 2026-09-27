@@ -57,6 +57,7 @@ type Client struct {
 	resyncs       int
 	connects      int
 	acked         []uint64 // client seqs the server acked as applied
+	cursors       map[uint64][2]float64
 }
 
 func New(cfg Config) *Client {
@@ -73,6 +74,7 @@ func New(cfg Config) *Client {
 		doc:           doc.New(),
 		nextClientSeq: 1,
 		welcomed:      make(chan struct{}),
+		cursors:       map[uint64][2]float64{},
 	}
 }
 
@@ -289,6 +291,7 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 	}
 	c.doc = d
 	c.serverSeq = w.GetSeq()
+	clear(c.cursors) // positions are re-sent as people move
 	kept := c.pending[:0]
 	for _, b := range c.pending {
 		if b.GetClientSeq() > w.GetLastClientSeq() {
@@ -328,6 +331,13 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		c.clock.Observe(st)
 		maxSeq = max(maxSeq, b.GetSeq())
 	}
+	for _, cu := range f.GetCursors() {
+		if cu.GetGone() {
+			delete(c.cursors, cu.GetClientId())
+		} else {
+			c.cursors[cu.GetClientId()] = [2]float64{cu.GetX(), cu.GetY()}
+		}
+	}
 	resync := false
 	for _, a := range f.GetAcks() {
 		i := c.pendingIndex(a.GetClientSeq())
@@ -366,6 +376,29 @@ func (c *Client) pendingIndex(clientSeq uint64) int {
 		}
 	}
 	return -1
+}
+
+// MoveCursor sends this client's pointer position if connected.
+func (c *Client) MoveCursor(x, y float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.conn == nil || !c.isWelcomed() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = write(ctx, c.conn, &pb.ClientMessage{Msg: &pb.ClientMessage_Cursor{Cursor: &pb.Cursor{X: x, Y: y}}})
+}
+
+// Cursors returns the other clients' cursor positions this client has seen.
+func (c *Client) Cursors() map[uint64][2]float64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[uint64][2]float64, len(c.cursors))
+	for id, p := range c.cursors {
+		out[id] = p
+	}
+	return out
 }
 
 // Snapshot returns the local replica in canonical form.
