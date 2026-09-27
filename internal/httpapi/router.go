@@ -4,6 +4,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -40,6 +41,11 @@ func NewRouter(d Deps) http.Handler {
 
 	// Scraped by Prometheus on the internal network; Caddy does not expose it.
 	mux.Handle("GET /metrics", promhttp.HandlerFor(d.Metrics.Registry, promhttp.HandlerOpts{}))
+
+	// Profiling, on the internal network only (like /metrics).
+	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 
 	mux.Handle("GET /ws", d.Gateway)
 	return mux

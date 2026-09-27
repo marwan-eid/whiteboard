@@ -16,6 +16,7 @@ import {
   STICKY_FILL,
   UNBOUND,
   anchorPoint,
+  arrowEnds,
   binding,
   bindingTarget,
   canHoldText,
@@ -230,9 +231,13 @@ export class Controller {
         drag.gesture.edit(this.moveOps(drag.origin, w.x - drag.start.x, w.y - drag.start.y));
         break;
       }
-      case "resize":
-        drag.gesture.edit([this.resizeOp(drag, w)]);
+      case "resize": {
+        const r = this.resizeOp(drag, w);
+        const p = r.props!;
+        const box = { x: p.x ?? 0, y: p.y ?? 0, w: p.w ?? 0, h: p.h ?? 0 };
+        drag.gesture.edit([r, ...this.attachedArrowOps(new Map([[drag.id, box]]), new Set([drag.id]))]);
         break;
+      }
       case "end": {
         const target = this.bindingAt(w, drag.id);
         const [a, b] = drag.end === "from" ? [w, drag.fixed] : [drag.fixed, w];
@@ -448,15 +453,37 @@ export class Controller {
 
   private moveOps(origin: Map<string, MoveOrigin>, dx: number, dy: number): Op[] {
     const ops: Op[] = [];
+    const moved = new Map<string, Rect>();
     for (const [id, o] of origin) {
       if (!o.ends) {
-        ops.push(op(id, { x: Math.round(o.x + dx), y: Math.round(o.y + dy) }));
+        const x = Math.round(o.x + dx);
+        const y = Math.round(o.y + dy);
+        ops.push(op(id, { x, y }));
+        const p = this.d.session.doc.get(id)?.props;
+        moved.set(id, { x, y, w: p?.w ?? 0, h: p?.h ?? 0 });
         continue;
       }
       // An arrow keeps an attachment only if its target moves with it.
       const [a, b] = o.ends.map((p) => ({ x: p.x + dx, y: p.y + dy })) as [Point, Point];
       const keep = (bd?: Binding) => (bd?.objectId && origin.has(bd.objectId) ? bd : UNBOUND);
       ops.push(op(id, { ...arrowGeometry(a, b), from: keep(o.from), to: keep(o.to) }));
+    }
+    return [...ops, ...this.attachedArrowOps(moved, new Set(origin.keys()))];
+  }
+
+  /**
+   * Keeps the stored geometry of arrows attached to moved objects in step
+   * with where they are drawn: the server decides who receives an object by
+   * its stored box, so a stale box could hide an arrow from a viewer.
+   */
+  private attachedArrowOps(moved: ReadonlyMap<string, Rect>, skip: ReadonlySet<string>): Op[] {
+    const arrows = new Set<string>();
+    for (const id of moved.keys()) for (const a of this.d.scene.arrowsAttachedTo(id)) if (!skip.has(a)) arrows.add(a);
+    const ops: Op[] = [];
+    for (const a of arrows) {
+      const o = this.d.session.doc.get(a);
+      const ends = o && arrowEnds(this.d.session.doc, o.props, moved);
+      if (ends) ops.push(op(a, arrowGeometry(ends[0], ends[1])));
     }
     return ops;
   }

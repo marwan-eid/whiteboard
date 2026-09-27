@@ -3,6 +3,7 @@ import {
   FieldStampsSchema,
   ObjectPropsSchema,
   ObjectStateSchema,
+  OpSchema,
   type ObjectProps,
   type ObjectState,
   type Op,
@@ -79,6 +80,30 @@ export class Doc {
       if (this.apply(op, st)) changed.add(op.id);
     }
     return changed;
+  }
+
+  /**
+   * Merges an object's state (full, or limited to some fields) using its
+   * per-field stamps, as if each write were applied as an op.
+   */
+  mergeState(s: ObjectState): boolean {
+    let changed = false;
+    for (const fs of s.stamps) {
+      if (!s.props) break;
+      const props = create(ObjectPropsSchema);
+      for (const f of FIELDS) {
+        if (fs.fieldMask & (1 << f.number) && isFieldSet(s.props, f)) {
+          (props as unknown as PropRecord)[f.localName] = (s.props as unknown as PropRecord)[f.localName];
+        }
+      }
+      if (this.apply(create(OpSchema, { id: s.id, props }), stampFromProto(fs.stamp))) changed = true;
+    }
+    return changed;
+  }
+
+  /** Forgets an object entirely (the server said it left our view). */
+  delete(id: string): boolean {
+    return this.objects.delete(id);
   }
 
   /** Canonical form shared with the server: sorted by id, stamps grouped ascending. */

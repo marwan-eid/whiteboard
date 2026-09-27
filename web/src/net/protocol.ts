@@ -13,12 +13,24 @@ export const PROTOCOL_VERSION = 1;
 /** Largest client id: ids must stay exact as JS numbers (internal/protocol.MaxClientID). */
 export const MAX_CLIENT_ID = 2 ** 53 - 1;
 
-export function encodeHello(boardId: string, clientId: number): Uint8Array<ArrayBuffer> {
+export interface ViewportRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  lod: boolean;
+}
+
+export function encodeHello(boardId: string, clientId: number, viewport?: ViewportRect): Uint8Array<ArrayBuffer> {
   return encode(
     create(ClientMessageSchema, {
-      msg: { case: "hello", value: { protocolVersion: PROTOCOL_VERSION, boardId, clientId: BigInt(clientId) } },
+      msg: { case: "hello", value: { protocolVersion: PROTOCOL_VERSION, boardId, clientId: BigInt(clientId), viewport } },
     }),
   );
+}
+
+export function encodeViewport(v: ViewportRect): Uint8Array<ArrayBuffer> {
+  return encode(create(ClientMessageSchema, { msg: { case: "viewport", value: v } }));
 }
 
 export function encodeTimePing(t0: number): Uint8Array<ArrayBuffer> {

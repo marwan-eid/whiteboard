@@ -6,6 +6,8 @@
 export class FrameScheduler {
   private requested = false;
   private readonly before: (() => void)[] = [];
+  /** Durations of recent frames (pre-render steps plus render), in ms. */
+  readonly recent: number[] = [];
 
   constructor(
     private readonly render: () => void,
@@ -22,8 +24,11 @@ export class FrameScheduler {
     this.requested = true;
     this.raf(() => {
       this.requested = false;
+      const start = performance.now();
       for (const fn of this.before) fn();
       this.render();
+      this.recent.push(performance.now() - start);
+      if (this.recent.length > 2000) this.recent.shift();
     });
   };
 }

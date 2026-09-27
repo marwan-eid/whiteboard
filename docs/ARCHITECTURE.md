@@ -148,17 +148,16 @@ The schema is [proto/whiteboard/v1/protocol.proto](../proto/whiteboard/v1/protoc
 
 | Direction | Message | Purpose | Since |
 |---|---|---|---|
-| Client → server | `Hello{boardId, clientId}` | Join or rejoin a board. The token and viewport come later. | W0/W1 |
+| Client → server | `Hello{boardId, clientId, viewport}` | Join or rejoin a board. A missing viewport means the whole board. The guest token comes later. | W0/W1 (viewport W4) |
 | Client → server | `OpBatch{clientSeq, stamp, ops}` | Send edits. | W1 |
 | Client → server | `TimePing{t0}` | RTT and clock-offset estimation. | W0 |
-| Client → server | `Viewport{rect, lod}` | Change the region the client is watching. | W4 |
+| Client → server | `Viewport{x, y, w, h, lod}` | Change the region the client receives. It is ordered with the client's batches. | W4 |
 | Client → server | `Cursor{x, y}` | Presence. | W3 |
 | Client → server | `HistoryAt{seq}` | Request board state at a point in history. | W5 |
-| Server → client | `Welcome{seq, objects, lastClientSeq, serverTime}` | Snapshot for (re)joining. `lastClientSeq` tells a reconnecting client which pending batches the server already applied. | W1 |
-| Server → client | `Frame{batches[], acks[], cursors[]}` | Per-tick delivery: other clients' batches in seq order, acks for this client's own, and cursors that moved or left. An ack carries the stamp the batch was applied with, or `rejected`. | W1 (cursors W3) |
+| Server → client | `Welcome{seq, objects, lastClientSeq, serverTime, online}` | Snapshot of the objects in the viewport, for (re)joining. `lastClientSeq` tells a reconnecting client which pending batches the server already applied. | W1 |
+| Server → client | `Frame{batches[], acks[], cursors[], objects[], leave[], online, seq}` | Per-tick delivery. It carries:<br>• the ops of other clients' batches on objects this client holds, in seq order<br>• acks for its own batches: the stamp each was applied with, or `rejected`<br>• nearby cursors that moved or left<br>• objects entering its view, in full<br>• ids of objects leaving its view<br>• the online count<br>• the board seq | W1 (cursors W3, the rest W4) |
 | Server → client | `TimePong{t0, serverTime}` | Clock-offset reply. | W0 |
 | Server → client | `ServerError{code, message}` | Sent before closing; codes that retrying can't fix (`UNSUPPORTED_VERSION`, `BAD_REQUEST`, `CLIENT_ID_IN_USE`) stop reconnection. | W0/W1 |
-| Server → client | `ViewportDiff{enter[], leave[]}` | Objects entering or leaving the client's region. | W4 |
 | Server → client | `Moved{nodeId}` | Wrong node; the client should re-route. | W8 |
 
 ## 3. Data flows
@@ -184,7 +183,8 @@ sequenceDiagram
   A->>A: drop acked ops from queue
 ```
 
-- **Encode once (W4):** each op will be serialized once per tick, and a client's frame will be the concatenation of the pre-encoded ops it is interested in. In W1, each client's frame is marshaled separately; that is the baseline to measure the optimization against.
+- **Encode once:** each op, cursor update and entering object is serialized once per tick. A client's frame is assembled by concatenating the pre-encoded pieces it needs ([internal/board/frame.go](../internal/board/frame.go)). A property test checks the assembled bytes decode to exactly the marshaled message.
+- **Parallel fan-out:** frames are independent per client, so with 32 or more clients they are built by a pool of worker goroutines while the actor waits ([internal/board/fanout.go](../internal/board/fanout.go)). Workers only read board state; kicking a slow client happens afterwards, on the actor.
 - **Backpressure:** each connection has a bounded send queue (256 messages). A client that overflows it is closed with WebSocket code 1013 ("try again later"). It then reconnects and gets a fresh snapshot, so one slow client never stalls the board. Incoming traffic is throttled differently: a client whose batches fill the board's inbox is blocked on its own socket, not dropped.
 - **Commit before broadcast:** each tick, the board appends that tick's batches with one `COPY`, then sends acks and frames. An edit becomes visible to others only after it is durable.
 - **Crash-only failure:** if a commit fails, the board kicks every client (close code 1013) and unloads. Uncommitted batches were never acked, so their clients resend them to the reloaded board.
@@ -196,23 +196,26 @@ sequenceDiagram
 - **Convergence tests:** [internal/client/client_test.go](../internal/client/client_test.go) drives real sockets with random edits, drops, and offline periods. [web/src/sync/session.test.ts](../web/src/sync/session.test.ts) property-tests the browser session against a model server.
 
 ### 3.2 Viewport interest (spatial filtering)
-- **Server index:** the board actor keeps a uniform grid of 512×512-unit cells mapping each cell to object ids. Updates are O(cells covered), and moves are frequent.
-- **Subscriptions:** each client subscribes to its viewport rectangle plus a 50% margin.
-- **Per op:** the server tests the object's old and new bounding boxes against each client's rectangle.
-  - **Enters the view** (new box intersects, old box didn't): send the full object.
-  - **Inside the view** (both boxes intersect): send the delta.
-  - **Leaves the view** (old box intersects, new box doesn't): send the delta; the client evicts the object.
-- **No per-client object sets:** thanks to these rules, the server doesn't track which objects each client holds, only each client's rectangle.
-- **Viewport change:** the server queries the grid for the new rectangle minus the old one and sends a `ViewportDiff`.
-- **LOD mode:** used below a zoom threshold. The server sends `{id, bbox, fill}` only, and the client draws plain rectangles.
+- **Server index:** the board actor keeps a uniform grid of 512×512-unit cells, mapping each cell to the visible objects in it ([internal/spatial](../internal/spatial)). Updates are O(cells covered), and moves are frequent. Very large boxes go in a separate list that every query checks.
+- **Subscriptions:** each client subscribes to its visible area plus a 50% margin per side. It resubscribes when the view leaves that area, when LOD turns on or off, or when zooming in has left most of the subscription unused.
+- **The server decides what each client holds:** the visible objects whose box intersects its viewport. For each op, the server compares the object's box before and after against each client's viewport:
+  - **In view before and after:** the client gets the op (a delta). The sender is skipped, since it applied its own op already.
+  - **Enters the view:** the client gets the full object in `Frame.objects`. This includes the sender, for example when it undoes a delete.
+  - **Leaves the view** (or is deleted): the object's id goes in `Frame.leave`.
+- **Clients never evict on their own.** They apply deltas only to objects they hold. An early design had clients evict by their own copy of an object's position, and randomized tests showed that races: a concurrent edit could leave the server believing a client still held an object it had dropped.
+- **Pending edits are kept:** a left object that has unacknowledged local edits stays on the client until they are acked. The server never echoes a client's own edits, so dropping the object would lose them. The randomized tests found this case too.
+- **Viewport change:** the server first judges the tick's earlier ops against the old view, then queues enters for objects in the new view only and leaves for objects in the old view only. Without the first step, ops that happened under the old view would be judged by the new one; the randomized tests found that as well.
+- **Arrows:** interest uses each object's stored box. When a shape moves or is resized, the client updates the stored geometry of arrows attached to it in the same batch, so an arrow's stored box stays where it is drawn.
+- **LOD mode:** used below 20% zoom. The server sends only the box properties (type, deleted, x, y, w, h, z, fill), and clients draw every object as one particle in a Pixi `ParticleContainer`, uploaded to the GPU only when something changed.
+- **Tests:** [internal/client/client_test.go](../internal/client/client_test.go) runs randomized convergence with random, changing viewports, crashes and drops. Each client must end up holding exactly the server's visible objects in its viewport.
 
 ### 3.3 Presence (live cursors)
 - **Ephemeral:** cursors are never persisted or sequenced.
 - **Client side:** each client sends at most 15 Hz. The throttle always sends the latest position last.
 - **Gateway:** drops cursor messages that arrive less than 40 ms after the previous one from the same connection.
-- **Board:** cursor updates skip the actor's inbox. Connection goroutines write the latest position per client into a small mutex-guarded map, so presence traffic can never delay edits.
-- **Per tick:** the actor sends each client the cursors that moved since the last tick (not its own), plus a `gone` entry for clients that left. Moves from clients no longer on the board are dropped, so a late cursor message can't leave a ghost behind.
-- **Planned (W4):** each client gets only the **K = 30 nearest** cursors within its viewport, plus a count of the rest.
+- **Board:** cursor updates skip the actor's inbox. Connection goroutines write the latest position per client into a small mutex-guarded map, so presence traffic can never delay edits. Moves from clients no longer on the board are dropped, so a late cursor message can't leave a ghost behind.
+- **Every 3rd tick (about 16 Hz):** each client gets the **30 nearest** cursors in its viewport, found through a grid of cursor positions. It receives positions that moved or newly entered its selection, and `gone` for ones that left. `Frame.online` carries the total count.
+- **Why not every tick:** a profile under 200 editors showed presence on every tick taking about 30% of CPU, all on the board actor ([local pre-check](../benchmarks/results/2026-09-27-local-w4.md)).
 
 ### 3.4 Reconnect and offline
 ```mermaid

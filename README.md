@@ -2,7 +2,7 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-> **Status: early development. W3 (usable editor) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, and survive a server crash. None of the performance targets has been measured yet; they are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+> **Status: early development. W4 (scale on one board) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, and each client loads only the part of the board it is looking at. The performance targets in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) have not been benchmarked yet; local pre-checks are in [benchmarks/results](benchmarks/results).
 
 ## Run it
 
@@ -47,7 +47,9 @@ npm run dev:web
 | Web lint / typecheck / unit tests | `npm run lint`, `npm run typecheck`, `npm test` |
 | Browser smoke test (stack must be running) | `npm -w web run e2e` |
 | Regenerate protocol code after editing `proto/` | `npm run gen` |
-| Simulated clients | `go run ./cmd/loadgen -clients 100 -duration 10s` |
+| Simulated editors (reports sync latency) | `go run ./cmd/loadgen -editors 100 -duration 30s` |
+| Fill a board with objects | `go run ./cmd/seed -board big -objects 100000` |
+| Browser performance on a big board | `npx -w web playwright test -c perf.config.ts` |
 
 ## Layout
 

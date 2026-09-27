@@ -2,7 +2,7 @@ import type { Frame, OpBatch, Welcome } from "../gen/whiteboard/v1/protocol_pb";
 import { ErrorCode } from "../gen/whiteboard/v1/protocol_pb";
 import { backoffDelay } from "./backoff";
 import { ClockSync } from "./clock";
-import { decodeServerMessage, encodeCursor, encodeHello, encodeOpBatch, encodeTimePing } from "./protocol";
+import { decodeServerMessage, encodeCursor, encodeHello, encodeOpBatch, encodeTimePing, encodeViewport, type ViewportRect } from "./protocol";
 
 export type ConnectionState =
   | { status: "connecting"; attempt: number }
@@ -33,6 +33,8 @@ export interface ConnectionOptions {
   boardId: string;
   clientId: number;
   handlers?: Partial<ConnectionHandlers>;
+  /** The region to receive (the whole board if it returns undefined). */
+  viewport?: () => ViewportRect | undefined;
   pingIntervalMs?: number;
   createSocket?: (url: string) => SocketLike;
   /** Monotonic clock in ms, used for RTT. */
@@ -72,6 +74,7 @@ export class Connection {
       wallNow: () => Date.now(),
       random: Math.random,
       handlers: {},
+      viewport: () => undefined,
       ...opts,
     };
   }
@@ -119,6 +122,14 @@ export class Connection {
     return true;
   }
 
+  /** Sends the current viewport (from the viewport option) if welcomed. */
+  sendViewport(): boolean {
+    const v = this.opts.viewport();
+    if (!this.socket || !this.welcomed || !v) return false;
+    this.socket.send(encodeViewport(v));
+    return true;
+  }
+
   /** Drops the connection and reconnects at once to get a fresh snapshot. */
   resync(): void {
     if (this.stopped) return;
@@ -136,7 +147,7 @@ export class Connection {
     this.welcomed = false;
     let rejectedReason: string | null = null;
 
-    socket.onopen = () => socket.send(encodeHello(this.opts.boardId, this.opts.clientId));
+    socket.onopen = () => socket.send(encodeHello(this.opts.boardId, this.opts.clientId, this.opts.viewport()));
 
     socket.onmessage = (ev) => {
       if (!(ev.data instanceof ArrayBuffer)) return;
@@ -148,6 +159,8 @@ export class Connection {
           this.clock.seedFrom(Number(msg.value.serverTimeMs), this.opts.wallNow());
           this.setState({ status: "connected", nodeId: msg.value.nodeId, rttMs: null });
           this.opts.handlers.onWelcome?.(msg.value);
+          // The viewport may have changed after the Hello went out.
+          this.sendViewport();
           this.startPinging(socket);
           break;
         case "frame":

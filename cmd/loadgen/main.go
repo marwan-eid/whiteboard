@@ -1,10 +1,13 @@
-// Command loadgen opens many simulated clients against a node and reports
-// round-trip latency. Exits non-zero if any client fails, so CI can use it
-// as a smoke test.
+// Command loadgen runs simulated editors against a node and reports
+// sender-to-receiver sync latency. It exits non-zero if any editor fails to
+// connect, so CI can use it as a smoke test.
+//
+//	go run ./cmd/loadgen -url ws://localhost:8080/ws -editors 200 -duration 30s
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -20,28 +23,40 @@ func main() {
 
 func run() int {
 	var cfg loadgen.Config
+	var out string
 	flag.StringVar(&cfg.URL, "url", "ws://localhost:8080/ws", "WebSocket URL of a node (or Caddy)")
-	flag.StringVar(&cfg.BoardID, "board", "demo", "board id to join")
-	flag.IntVar(&cfg.Clients, "clients", 100, "number of simulated clients")
-	flag.DurationVar(&cfg.Duration, "duration", 10*time.Second, "how long each client stays connected")
-	flag.DurationVar(&cfg.Ramp, "ramp", 2*time.Second, "spread client connects over this period")
-	flag.DurationVar(&cfg.PingInterval, "ping-interval", time.Second, "time between pings per client")
+	flag.StringVar(&cfg.BoardID, "board", fmt.Sprintf("load-%d", time.Now().Unix()), "board id")
+	flag.IntVar(&cfg.Editors, "editors", 100, "simulated editors")
+	flag.DurationVar(&cfg.Ramp, "ramp", 5*time.Second, "spread connects over this period")
+	flag.DurationVar(&cfg.Warmup, "warmup", 2*time.Second, "excluded from measurement, after the ramp")
+	flag.DurationVar(&cfg.Duration, "duration", 30*time.Second, "editing time after the ramp")
+	flag.Float64Var(&cfg.OpsPerSec, "ops", 1, "move batches per editor per second")
+	flag.Float64Var(&cfg.CursorHz, "cursor-hz", 15, "cursor updates per editor per second")
+	flag.Float64Var(&cfg.Hotspot, "hotspot", 0.5, "fraction of editors viewing the shared center region")
+	flag.Float64Var(&cfg.Area, "area", 20_000, "side of the square board area editors spread over")
+	flag.Uint64Var(&cfg.Seed, "seed", uint64(time.Now().UnixNano()), "random seed")
+	flag.StringVar(&out, "json", "", "also write the summary as JSON to this file")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	start := time.Now()
 	res := loadgen.Run(ctx, cfg)
 	s := res.Summarize()
-
-	fmt.Printf("clients: %d connected, %d failed (%s)\n", res.Connected, res.Failed, time.Since(start).Round(time.Millisecond))
+	fmt.Printf("editors: %d connected, %d failed; %d ops sent in %.1fs\n", s.Connected, s.Failed, s.OpsSent, s.ElapsedS)
 	for msg, n := range res.Errors {
 		fmt.Printf("  %dx %s\n", n, msg)
 	}
-	fmt.Printf("ping rtt: n=%d p50=%s p99=%s max=%s\n", s.Count, s.P50, s.P99, s.Max)
-
-	if res.Failed > 0 || res.Connected == 0 {
+	fmt.Printf("sync latency (sender to receiver, %d samples): p50=%.1fms p90=%.1fms p99=%.1fms p99.9=%.1fms max=%.1fms\n",
+		s.Samples, s.P50ms, s.P90ms, s.P99ms, s.P999ms, s.MaxMs)
+	if out != "" {
+		data, _ := json.MarshalIndent(map[string]any{"config": cfg, "summary": s}, "", "  ")
+		if err := os.WriteFile(out, data, 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
+	if s.Failed > 0 || s.Connected == 0 {
 		return 1
 	}
 	return 0

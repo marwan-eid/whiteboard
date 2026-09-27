@@ -25,45 +25,45 @@ func startNode(t *testing.T) string {
 	return "ws" + strings.TrimPrefix(srv.URL, "http")
 }
 
-func TestRunAgainstGateway(t *testing.T) {
-	url := startNode(t)
+func TestEditorsMeasureSyncLatency(t *testing.T) {
 	res := Run(context.Background(), Config{
-		URL:          url,
-		BoardID:      "demo",
-		Clients:      50,
-		Duration:     300 * time.Millisecond,
-		Ramp:         100 * time.Millisecond,
-		PingInterval: 50 * time.Millisecond,
+		URL:       startNode(t),
+		BoardID:   "load",
+		Editors:   20,
+		Ramp:      200 * time.Millisecond,
+		Duration:  1500 * time.Millisecond,
+		OpsPerSec: 10,
+		CursorHz:  15,
+		Hotspot:   1, // everyone watches the same region, so everyone receives everything
+		Seed:      1,
 	})
-	if res.Failed != 0 || res.Connected != 50 {
-		t.Fatalf("connected=%d failed=%d errors=%v", res.Connected, res.Failed, res.Errors)
+	s := res.Summarize()
+	if s.Failed != 0 || s.Connected != 20 {
+		t.Fatalf("connected=%d failed=%d errors=%v", s.Connected, s.Failed, res.Errors)
 	}
-	if s := res.Summarize(); s.Count < 50 || s.P99 <= 0 || s.P50 > s.P99 || s.P99 > s.Max {
-		t.Fatalf("implausible summary: %+v", s)
+	if s.OpsSent == 0 || s.Samples == 0 {
+		t.Fatalf("no traffic measured: %+v", s)
+	}
+	// Each op is received by up to 19 other editors.
+	if s.Samples > s.OpsSent*19 {
+		t.Fatalf("%d samples for %d ops", s.Samples, s.OpsSent)
+	}
+	if s.P50ms <= 0 || s.P50ms > s.P99ms || s.P99ms > s.MaxMs {
+		t.Fatalf("implausible percentiles: %+v", s)
 	}
 }
 
-func TestRunReportsServerRejection(t *testing.T) {
+func TestSpreadEditorsReceiveLess(t *testing.T) {
 	url := startNode(t)
-	res := Run(context.Background(), Config{
-		URL: url, BoardID: "not a valid id", Clients: 3,
-		Duration: 50 * time.Millisecond, PingInterval: 10 * time.Millisecond,
-	})
-	if res.Failed != 3 || res.Connected != 0 {
-		t.Fatalf("connected=%d failed=%d, want all rejected", res.Connected, res.Failed)
+	run := func(board string, hotspot float64) Summary {
+		return Run(context.Background(), Config{
+			URL: url, BoardID: board, Editors: 10, Duration: time.Second,
+			OpsPerSec: 10, Hotspot: hotspot, Area: 1e6, Seed: 2,
+		}).Summarize()
 	}
-}
-
-func TestSummarize(t *testing.T) {
-	var r Result
-	for i := 1; i <= 100; i++ {
-		r.RTTs = append(r.RTTs, time.Duration(i)*time.Millisecond)
-	}
-	s := r.Summarize()
-	if s.Count != 100 || s.P50 != 50*time.Millisecond || s.P99 != 99*time.Millisecond || s.Max != 100*time.Millisecond {
-		t.Fatalf("got %+v", s)
-	}
-	if (Result{}).Summarize() != (Summary{}) {
-		t.Fatal("empty result should summarize to zero")
+	together, apart := run("together", 1), run("apart", 0)
+	// Viewport interest: editors far apart receive (almost) none of each other's ops.
+	if apart.Samples*5 > together.Samples {
+		t.Fatalf("spread editors received %d samples vs %d together", apart.Samples, together.Samples)
 	}
 }

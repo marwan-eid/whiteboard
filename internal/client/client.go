@@ -200,8 +200,9 @@ func (c *Client) Close() {
 	c.Offline()
 }
 
-// Edit stamps ops, applies them locally, queues them, and sends them if connected.
-func (c *Client) Edit(ops ...*pb.Op) {
+// Edit stamps ops, applies them locally, queues them, and sends them if
+// connected. It returns the batch's stamp, which identifies it in frames.
+func (c *Client) Edit(ops ...*pb.Op) hlc.Stamp {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := c.clock.Now()
@@ -213,6 +214,7 @@ func (c *Client) Edit(ops ...*pb.Op) {
 	if c.conn != nil && c.isWelcomed() {
 		c.sendLocked(batch)
 	}
+	return st
 }
 
 func (c *Client) isWelcomed() bool {

@@ -36,7 +36,7 @@ class ModelServer {
     c.inbox.push(
       create(WelcomeSchema, {
         seq: BigInt(this.seq),
-        objects: this.doc.snapshot(),
+        objects: this.doc.snapshot().filter((s) => this.visible(s.id)),
         lastClientSeq: BigInt(this.lastClientSeq.get(c.id) ?? 0),
       }),
     );
@@ -56,15 +56,48 @@ class ModelServer {
     if (cs !== last + 1) throw new Error(`client ${c.id} skipped from ${last} to ${cs}`);
     this.lastClientSeq.set(c.id, cs);
     const stamp = { ...stampFromProto(b.stamp), clientId: c.id };
-    this.doc.applyBatch(b.ops, stamp);
+    // Like the board (with whole-board viewports): ops on objects that stay
+    // visible go out as deltas, objects becoming visible go out in full, and
+    // objects becoming invisible are named in leave.
+    const moves = new Map<string, boolean>();
+    const deltas: typeof b.ops = [];
+    for (const op of b.ops) {
+      const before = this.visible(op.id);
+      this.doc.apply(op, stamp);
+      const after = this.visible(op.id);
+      if (before && after) deltas.push(op);
+      else if (before !== after) moves.set(op.id, after);
+    }
     this.seq++;
-    const sb = create(SequencedBatchSchema, { seq: BigInt(this.seq), stamp: stampToProto(stamp), ops: b.ops });
+    const sb = create(SequencedBatchSchema, { seq: BigInt(this.seq), stamp: stampToProto(stamp), ops: deltas });
+    const objects = [...moves].filter(([, v]) => v).map(([id]) => this.state(id));
+    const leave = [...moves].filter(([, v]) => !v).map(([id]) => id);
     for (const other of this.clients.values()) {
-      if (other !== c) other.inbox.push(create(FrameSchema, { batches: [sb] }));
+      if (other !== c) other.inbox.push(create(FrameSchema, { batches: deltas.length ? [sb] : [], objects, leave, seq: BigInt(this.seq) }));
     }
     c.inbox.push(
-      create(FrameSchema, { acks: [create(AckSchema, { clientSeq: b.clientSeq, seq: BigInt(this.seq), stamp: stampToProto(stamp) })] }),
+      create(FrameSchema, {
+        acks: [create(AckSchema, { clientSeq: b.clientSeq, seq: BigInt(this.seq), stamp: stampToProto(stamp) })],
+        objects,
+        leave,
+        seq: BigInt(this.seq),
+      }),
     );
+  }
+
+  visible(id: string): boolean {
+    const o = this.doc.get(id);
+    return !!o && o.props.type !== undefined && o.props.deleted !== true;
+  }
+
+  state(id: string) {
+    return this.doc.snapshot().find((s) => s.id === id)!;
+  }
+
+  visibleSnapshot(): Doc {
+    const d = new Doc();
+    for (const s of this.doc.snapshot()) if (this.visible(s.id)) d.mergeState(s);
+    return d;
   }
 }
 
@@ -233,7 +266,7 @@ describe("SyncSession against a model server", () => {
         for (const c of clients) {
           expect(c.session.pendingCount, `client ${c.id} pending`).toBe(0);
           expect(c.session.seq, `client ${c.id} seq`).toBe(server.seq);
-          expect(snapshotsEqual(c.session.doc, server.doc), `client ${c.id} replica`).toBe(true);
+          expect(snapshotsEqual(c.session.doc, server.visibleSnapshot()), `client ${c.id} replica`).toBe(true);
         }
       }),
       { numRuns: 300 },

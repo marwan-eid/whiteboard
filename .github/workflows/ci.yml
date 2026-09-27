@@ -75,8 +75,8 @@ jobs:
       - name: Start stack
         run: docker compose up --build --detach --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/healthz && curl -fsS http://localhost:8080/readyz
-      - name: 200 simulated clients through Caddy
-        run: go run ./cmd/loadgen -url ws://localhost:8080/ws -clients 200 -duration 5s -ramp 2s -ping-interval 500ms
+      - name: 200 simulated editors through Caddy
+        run: go run ./cmd/loadgen -url ws://localhost:8080/ws -editors 200 -ramp 3s -warmup 1s -duration 5s
       - name: Browser smoke test
         run: |
           npm ci --ignore-scripts

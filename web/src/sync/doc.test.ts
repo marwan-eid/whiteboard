@@ -173,3 +173,19 @@ describe("Doc edge cases", () => {
     expect(d.snapshot()[0]!.stamps[0]!.fieldMask).toBe(1 << 11);
   });
 });
+
+describe("Doc.mergeState", () => {
+  it("rebuilds a replica from full states, whatever it saw before", () => {
+    fc.assert(
+      fc.property(
+        batchesArb.chain((bs) => fc.tuple(fc.constant(bs), orderArb(bs.length), fc.nat({ max: bs.length }))),
+        ([batches, order, cut]) => {
+          const full = applyAll(batches, order);
+          const partial = applyAll(batches, order.slice(0, cut));
+          for (const s of full.snapshot()) partial.mergeState(s);
+          return snapshotsEqual(full, partial);
+        },
+      ),
+    );
+  });
+});

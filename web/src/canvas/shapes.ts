@@ -50,31 +50,31 @@ export function bindingTarget(doc: Doc, b: Binding | undefined): DocObject | und
   return t && isVisible(t) && t.props.type !== ShapeType.ARROW ? t : undefined;
 }
 
-export function anchorPoint(target: ObjectProps, b: Binding): Point {
-  const r = propRect(target);
+export function anchorPoint(target: ObjectProps, b: Binding, r: Rect = propRect(target)): Point {
   return { x: r.x + b.anchorX * r.w, y: r.y + b.anchorY * r.h };
 }
 
 /**
  * Arrow endpoints: an attached end follows its target (stopping at the
- * target's border); a detached end uses the stored point.
+ * target's border); a detached end uses the stored point. `moved` gives
+ * targets' boxes that differ from the document (during a drag).
  */
-export function arrowEnds(doc: Doc, p: ObjectProps): [Point, Point] | null {
+export function arrowEnds(doc: Doc, p: ObjectProps, moved?: ReadonlyMap<string, Rect>): [Point, Point] | null {
   const stored = storedLine(p);
   if (stored.length < 2) return null;
   const fromT = bindingTarget(doc, p.from);
   const toT = bindingTarget(doc, p.to);
-  const rawStart = fromT ? anchorPoint(fromT.props, p.from!) : stored[0]!;
-  const rawEnd = toT ? anchorPoint(toT.props, p.to!) : stored[stored.length - 1]!;
-  const start = fromT ? clipToBorder(rawEnd, rawStart, fromT.props) : rawStart;
-  const end = toT ? clipToBorder(rawStart, rawEnd, toT.props) : rawEnd;
+  const rectOf = (t: DocObject) => moved?.get(t.id) ?? propRect(t.props);
+  const rawStart = fromT ? anchorPoint(fromT.props, p.from!, rectOf(fromT)) : stored[0]!;
+  const rawEnd = toT ? anchorPoint(toT.props, p.to!, rectOf(toT)) : stored[stored.length - 1]!;
+  const start = fromT ? clipToBorder(rawEnd, rawStart, fromT.props.type, rectOf(fromT)) : rawStart;
+  const end = toT ? clipToBorder(rawStart, rawEnd, toT.props.type, rectOf(toT)) : rawEnd;
   return [start, end];
 }
 
 /** Where the segment from `from` towards `to` meets the target's outline. */
-function clipToBorder(from: Point, to: Point, target: ObjectProps): Point {
-  const r = propRect(target);
-  return target.type === ShapeType.ELLIPSE ? clipToEllipseBorder(from, to, r) : clipToRectBorder(from, to, r);
+function clipToBorder(from: Point, to: Point, type: ShapeType | undefined, r: Rect): Point {
+  return type === ShapeType.ELLIPSE ? clipToEllipseBorder(from, to, r) : clipToRectBorder(from, to, r);
 }
 
 export function geometry(doc: Doc, o: DocObject): Geometry {

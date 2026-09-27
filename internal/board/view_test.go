@@ -207,3 +207,39 @@ func TestEachClientSeesOnlyNearestCursors(t *testing.T) {
 		}
 	}
 }
+
+// With many clients, frames are built in parallel; every client still gets
+// every op, and slow clients are kicked without disturbing the others.
+func TestParallelFanOut(t *testing.T) {
+	e := newEnv(t)
+	const n = 200
+	conns := make([]*fakeConn, n)
+	var bd *Board
+	for i := range conns {
+		conns[i] = newConn(uint64(100 + i))
+		bd, _ = e.join(t, "x", conns[i])
+	}
+	slow := conns[n-1]
+	slow.mu.Lock()
+	slow.full = true
+	slow.mu.Unlock()
+
+	// Client 100 is "2s" in base 36.
+	submit(t, bd, 100, batch(1, now.UnixMilli(), rectAt("2s:1", 0, 0)))
+	for i := range 20 {
+		bd.SetCursor(uint64(100+i), float64(i), 0)
+	}
+	submit(t, bd, 100, batch(2, now.UnixMilli()+1, &pb.Op{Id: "2s:1", Props: &pb.ObjectProps{X: proto.Float64(3)}}))
+
+	for _, c := range conns[1 : n-1] {
+		var sawObject, sawMove bool
+		for !sawObject || !sawMove {
+			f := c.frame(t)
+			sawObject = sawObject || len(f.Objects) == 1
+			for _, sb := range f.Batches {
+				sawMove = sawMove || sb.GetOps()[0].GetProps().GetX() == 3
+			}
+		}
+	}
+	waitFor(t, func() bool { r := slow.kickedFor(); return r != nil && *r == KickSlow })
+}

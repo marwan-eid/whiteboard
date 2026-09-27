@@ -7,6 +7,7 @@ import { Overlay } from "./canvas/overlay";
 import { Scene } from "./canvas/scene";
 import { createStage } from "./canvas/stage";
 import { TextEditor } from "./canvas/textEditor";
+import { ViewportTracker } from "./canvas/viewport";
 import { Controller } from "./canvas/tools";
 import { ShapeType } from "./gen/whiteboard/v1/protocol_pb";
 import { Connection, type ConnectionHandlers } from "./net/connection";
@@ -23,8 +24,15 @@ const clientId = randomClientId();
 
 // The connection delivers board traffic to the session, which sends through
 // the connection; they are wired through these handlers.
+const camera = new Camera();
+const stageHost = document.getElementById("stage")!;
+const uiHost = document.getElementById("ui")!;
+const viewport = new ViewportTracker(camera, () => ({ w: stageHost.clientWidth || window.innerWidth, h: stageHost.clientHeight || window.innerHeight }));
+
 const handlers: Partial<ConnectionHandlers> = {};
-const connection = new Connection({ url: wsUrl(location), boardId, clientId, handlers });
+const connection = new Connection({ url: wsUrl(location), boardId, clientId, handlers, viewport: () => viewport.current });
+viewport.subscribe(() => connection.sendViewport());
+window.addEventListener("resize", () => viewport.check());
 const sync = new SyncSession({
   clientId,
   now: () => connection.serverNow(),
@@ -42,11 +50,8 @@ handlers.onFrame = (f) => {
 };
 connection.start();
 
-const camera = new Camera();
 const editor = new Editor();
 const history = new History(sync);
-const stageHost = document.getElementById("stage")!;
-const uiHost = document.getElementById("ui")!;
 const center = () => ({ x: stageHost.clientWidth / 2, y: stageHost.clientHeight / 2 });
 
 render(
@@ -62,7 +67,9 @@ createStage(stageHost, camera)
     const frames = new FrameScheduler(() => app.render());
     camera.subscribe(frames.request);
     app.renderer.on("resize", frames.request);
-    const scene = new Scene(sync, camera, editor, frames.request);
+    const scene = new Scene(sync, camera, editor, frames);
+    scene.setLOD(viewport.lod);
+    viewport.subscribe((v) => scene.setLOD(v.lod));
     const overlay = new Overlay(scene, editor, camera, presence, frames);
     app.stage.addChild(scene.world, overlay.layer);
     const textEditor = new TextEditor(uiHost, sync, history, camera, editor);
@@ -77,6 +84,7 @@ createStage(stageHost, camera)
       overlay.invalidate();
     });
     scene.update(null);
+    hooks.frameTimes = () => frames.recent.splice(0);
     hooks.geometry = (id) => {
       const g = scene.geometryOf(id);
       return g ? { bounds: g.bounds, line: g.line } : null;
@@ -95,6 +103,8 @@ declare global {
       selection(): string[];
       camera(): { x: number; y: number; zoom: number };
       cursors(): number;
+      lod(): boolean;
+      frameTimes(): number[];
       geometry(id: string): { bounds: { x: number; y: number; w: number; h: number }; line?: { x: number; y: number }[] } | null;
     };
   }
@@ -114,6 +124,8 @@ const hooks: NonNullable<Window["__whiteboard"]> = {
   selection: () => [...editor.selection],
   camera: () => ({ x: camera.x, y: camera.y, zoom: camera.zoom }),
   cursors: () => presence.others.size,
+  lod: () => viewport.lod,
+  frameTimes: () => [],
   geometry: () => null,
 };
 window.__whiteboard = hooks;

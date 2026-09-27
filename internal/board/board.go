@@ -142,7 +142,10 @@ type Board struct {
 	cursorGrid      *spatial.Grid // cursor positions, keyed by base-36 client id
 	cursorIDs       map[string]uint64
 	goneCursors     []uint64
-	frameBuf        []byte
+	presenceMoved   map[uint64]bool // cursors that moved since the last presence tick
+	tick            uint64
+	workers         []*frameWorker
+	targets         []target
 
 	// Written by connection goroutines, drained by the actor each tick.
 	cursorMu    sync.Mutex
@@ -204,6 +207,7 @@ func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClo
 		cursorGrid:     spatial.NewGrid(512, 1),
 		cursorIDs:      map[string]uint64{},
 		cursorMoved:    map[uint64][2]float64{},
+		presenceMoved:  map[uint64]bool{},
 	}
 	go b.run()
 	return b
@@ -536,16 +540,27 @@ func (b *Board) flush() error {
 		}
 	}
 
-	moved := b.updateCursors()
+	for id := range b.updateCursors() {
+		b.presenceMoved[id] = true
+	}
+	b.tick++
+	t := &tickFrames{batches: batches, presence: b.tick%presenceEvery == 0, moved: b.presenceMoved, online: -1}
+	if b.onlineChanged {
+		t.online = len(b.clients)
+	}
 	joining := map[*clientState]bool{}
 	for _, c := range b.joining {
 		joining[c] = true
 	}
-	enterCache := map[string][]byte{}
+	b.targets = b.targets[:0]
 	for id, c := range b.clients {
 		if !joining[c] {
-			b.sendFrame(id, c, batches, moved, enterCache)
+			b.targets = append(b.targets, target{id, c})
 		}
+	}
+	b.sendFrames(t, b.targets)
+	if t.presence {
+		clear(b.presenceMoved)
 	}
 	clear(b.outAcks)
 	b.onlineChanged = false
@@ -573,58 +588,6 @@ func (b *Board) flush() error {
 	b.uncommitted = b.uncommitted[:0]
 	b.metrics.TickDuration.Observe(time.Since(start).Seconds())
 	return nil
-}
-
-// sendFrame assembles and queues one client's frame for this tick.
-func (b *Board) sendFrame(id uint64, c *clientState, batches []encodedBatch, moved map[uint64]bool, enterCache map[string][]byte) {
-	fb := newFrameBuilder(b.frameBuf)
-	defer func() { b.frameBuf = fb.body }()
-
-	b.judge(id, c)
-	var sel [][]byte
-	for k := 0; k < len(c.refs); {
-		bi := c.refs[k].batch
-		sel = sel[:0]
-		for ; k < len(c.refs) && c.refs[k].batch == bi; k++ {
-			entry := batches[bi].ops[c.refs[k].op]
-			if c.refs[k].lod {
-				entry = batches[bi].lodOps[c.refs[k].op]
-			}
-			if entry != nil {
-				sel = append(sel, entry)
-			}
-		}
-		if len(sel) > 0 {
-			fb.batch(batches[bi].header, sel)
-		}
-	}
-	c.refs, c.evaluatedUpTo = c.refs[:0], 0
-	for _, a := range b.outAcks[id] {
-		fb.message(fieldFrameAcks, a)
-	}
-	if len(moved) > 0 || c.presenceStale {
-		for _, u := range b.cursorsFor(id, c, moved) {
-			fb.message(fieldFrameCursors, u)
-		}
-		c.presenceStale = false
-	}
-	if len(c.moves) > 0 {
-		for _, oid := range sortedMoves(c.moves) {
-			if c.moves[oid] {
-				fb.raw(b.enterEntry(enterCache, oid, c.lod))
-			} else {
-				fb.leave(oid)
-			}
-		}
-		clear(c.moves)
-	}
-	if b.onlineChanged {
-		fb.online(uint32(len(b.clients)))
-	}
-	if !fb.empty {
-		fb.seq(b.seq)
-		b.deliverBytes(c.conn, fb.serverMessage())
-	}
 }
 
 // enterEntry returns an object's full (or LOD) state as a Frame.objects
