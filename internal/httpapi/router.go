@@ -1,0 +1,46 @@
+// Package httpapi wires the node's HTTP endpoints.
+package httpapi
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"whiteboard/internal/metrics"
+)
+
+type Deps struct {
+	// Gateway serves WebSocket upgrades on /ws.
+	Gateway http.Handler
+	Metrics *metrics.Metrics
+	// Ready reports whether the node can serve traffic (e.g. Postgres reachable).
+	Ready func(context.Context) error
+}
+
+func NewRouter(d Deps) http.Handler {
+	mux := http.NewServeMux()
+
+	// Liveness: the process is up. Used by container health checks.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok\n"))
+	})
+
+	// Readiness: dependencies are reachable.
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := d.Ready(ctx); err != nil {
+			http.Error(w, "not ready: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ready\n"))
+	})
+
+	// Scraped by Prometheus on the internal network; Caddy does not expose it.
+	mux.Handle("GET /metrics", promhttp.HandlerFor(d.Metrics.Registry, promhttp.HandlerOpts{}))
+
+	mux.Handle("GET /ws", d.Gateway)
+	return mux
+}

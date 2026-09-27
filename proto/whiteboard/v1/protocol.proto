@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package whiteboard.v1;
+
+// Wire protocol between browser/loadgen clients and a board node.
+// Every WebSocket binary frame carries exactly one ClientMessage or ServerMessage.
+// See docs/ARCHITECTURE.md and docs/decisions/0001-sync-model.md.
+//
+// 64-bit ids, seqs and times stay below 2^53, so the web client converts
+// them to JS numbers exactly (protobuf-es generates bigint for them).
+
+message ClientMessage {
+  oneof msg {
+    Hello hello = 1;
+    TimePing time_ping = 2;
+    OpBatch op_batch = 3;
+  }
+}
+
+message ServerMessage {
+  oneof msg {
+    Welcome welcome = 1;
+    TimePong time_pong = 2;
+    ServerError error = 3;
+    Frame frame = 4;
+  }
+}
+
+// First message on every connection.
+message Hello {
+  uint32 protocol_version = 1;
+  string board_id = 2;
+  // Random per client session, in [1, 2^53). Objects this client creates
+  // have ids prefixed with its base-36 form (see ObjectIdPrefix).
+  uint64 client_id = 3;
+}
+
+message Welcome {
+  uint32 protocol_version = 1;
+  string node_id = 2;
+  int64 server_time_ms = 3;
+  // The board as of seq. Frames that follow carry batches with higher seqs.
+  uint64 seq = 4;
+  repeated ObjectState objects = 5;
+  // Highest OpBatch.client_seq already applied for this client_id, so a
+  // reconnecting client knows which pending batches to drop and which to resend.
+  uint64 last_client_seq = 6;
+}
+
+// Clock-offset and RTT probe. The server echoes t0 and adds its own clock.
+message TimePing {
+  double t0 = 1;
+}
+
+message TimePong {
+  double t0 = 1;
+  int64 server_time_ms = 2;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_BAD_REQUEST = 1;
+  ERROR_CODE_UNSUPPORTED_VERSION = 2;
+  // Another live connection on this board uses the same client_id.
+  ERROR_CODE_CLIENT_ID_IN_USE = 3;
+}
+
+message ServerError {
+  ErrorCode code = 1;
+  string message = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Board model. An object is a map of properties; each property is a
+// last-writer-wins register ordered by Stamp. Creating, editing and deleting
+// are all "set these properties" (deleting sets deleted = true).
+
+// Hybrid logical clock timestamp, totally ordered by (wall_ms, counter, client_id).
+message Stamp {
+  int64 wall_ms = 1;
+  uint32 counter = 2;
+  uint64 client_id = 3;
+}
+
+enum ShapeType {
+  SHAPE_TYPE_UNSPECIFIED = 0;
+  SHAPE_TYPE_RECT = 1;
+  SHAPE_TYPE_ELLIPSE = 2;
+  SHAPE_TYPE_STICKY = 3;
+  SHAPE_TYPE_TEXT = 4;
+  SHAPE_TYPE_ARROW = 5;
+  SHAPE_TYPE_FREEHAND = 6;
+}
+
+// Field numbers must stay below 32: FieldStamps uses them as bit positions.
+message ObjectProps {
+  // Set once, when the object is created.
+  optional ShapeType type = 1;
+  optional bool deleted = 2;
+  optional double x = 3;
+  optional double y = 4;
+  optional double w = 5;
+  optional double h = 6;
+  // Fractional index; objects render in (z, id) order.
+  optional string z = 7;
+  // 0xRRGGBBAA.
+  optional uint32 fill = 8;
+  optional uint32 stroke = 9;
+  optional float stroke_width = 10;
+  optional string text = 11;
+}
+
+// Sets every property present in props, all with the batch's stamp.
+// An op on an unknown id creates the object and must set type.
+message Op {
+  string id = 1;
+  ObjectProps props = 2;
+}
+
+// One user action (e.g. dragging three shapes), applied atomically.
+message OpBatch {
+  // Per client, starting at 1 and increasing by 1.
+  uint64 client_seq = 1;
+  // client_id is ignored; the server uses the connection's.
+  Stamp stamp = 2;
+  repeated Op ops = 3;
+}
+
+// A batch as ordered by the board. stamp.client_id is the origin client.
+message SequencedBatch {
+  uint64 seq = 1;
+  Stamp stamp = 2;
+  repeated Op ops = 3;
+}
+
+message Ack {
+  uint64 client_seq = 1;
+  // Zero when rejected.
+  uint64 seq = 2;
+  // The stamp the batch was applied with. It differs from the one sent only
+  // if the server clamped a stamp too far in the future; the client must then resync.
+  Stamp stamp = 3;
+  // The batch failed validation and was not applied; the client must resync.
+  bool rejected = 4;
+  string reason = 5;
+}
+
+// Everything a client needs from one board tick: other clients' batches, in
+// seq order, and acks for its own.
+message Frame {
+  repeated SequencedBatch batches = 1;
+  repeated Ack acks = 2;
+}
+
+message ObjectState {
+  string id = 1;
+  ObjectProps props = 2;
+  repeated FieldStamps stamps = 3;
+}
+
+// The stamp of every property whose field number's bit is set in field_mask.
+message FieldStamps {
+  Stamp stamp = 1;
+  uint32 field_mask = 2;
+}

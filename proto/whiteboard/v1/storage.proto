@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package whiteboard.v1;
+
+import "whiteboard/v1/protocol.proto";
+
+// Server-side storage formats. Not sent to clients.
+
+// A full board as of seq, stored zstd-compressed in the snapshots table.
+message BoardSnapshot {
+  uint64 seq = 1;
+  repeated ObjectState objects = 2;
+  // Highest client_seq applied per client, so resends after a restart are
+  // still recognized as duplicates.
+  repeated ClientProgress clients = 3;
+}
+
+message ClientProgress {
+  uint64 client_id = 1;
+  uint64 last_client_seq = 2;
+}
+
+// One sequenced batch as stored in the ops table (the seq and client
+// columns live beside it).
+message StoredBatch {
+  Stamp stamp = 1;
+  repeated Op ops = 2;
+}

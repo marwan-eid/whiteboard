@@ -1,0 +1,151 @@
+{
+  "comment": "Merge vectors shared by internal/doc (Go) and web/src/sync/doc.ts. Each case's batches are applied in every order (with duplicates); every order must produce `expected` exactly: same values, same per-field stamps, grouped by stamp ascending. Proto3 JSON. Field numbers for masks: type=1 deleted=2 x=3 y=4 w=5 h=6 z=7 fill=8 stroke=9 strokeWidth=10 text=11.",
+  "cases": [
+    {
+      "name": "later write wins",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 0, "y": 0, "w": 10, "h": 10 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "x": 50 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "x": 50, "y": 0, "w": 10, "h": 10 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 114 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "fieldMask": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ties break on counter, then client id",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT" } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 10 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "x": 20 } }] },
+        { "stamp": { "wallMs": 150, "counter": 5, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "y": 5 } }] },
+        { "stamp": { "wallMs": 150, "counter": 4, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "y": 7 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "x": 20, "y": 5 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 150, "counter": 5, "clientId": 1 }, "fieldMask": 16 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "fieldMask": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "concurrent edits to different properties both survive",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 0, "y": 0, "fill": 4278190335 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 30, "y": 40 } }] },
+        { "stamp": { "wallMs": 190, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "fill": 16711935 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "x": 30, "y": 40, "fill": 16711935 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 190, "counter": 0, "clientId": 2 }, "fieldMask": 256 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "fieldMask": 24 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "delete survives edits, and a newer edit does not resurrect",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_ELLIPSE", "x": 0 } }] },
+        { "stamp": { "wallMs": 300, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "deleted": true } }] },
+        { "stamp": { "wallMs": 250, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 5 } }] },
+        { "stamp": { "wallMs": 400, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 9 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_ELLIPSE", "deleted": true, "x": 9 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 300, "counter": 0, "clientId": 2 }, "fieldMask": 4 },
+            { "stamp": { "wallMs": 400, "counter": 0, "clientId": 1 }, "fieldMask": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "restore is a newer deleted=false",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 1 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "deleted": true } }] },
+        { "stamp": { "wallMs": 300, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "deleted": false } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "deleted": false, "x": 1 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 10 },
+            { "stamp": { "wallMs": 300, "counter": 0, "clientId": 2 }, "fieldMask": 4 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "duplicate delivery is idempotent",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 1 } }] },
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 1 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 2 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "x": 2 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "x": 2 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "fieldMask": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "strings are whole-value LWW; multi-object batches",
+      "batches": [
+        {
+          "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 },
+          "ops": [
+            { "id": "1:a", "props": { "type": "SHAPE_TYPE_STICKY", "text": "hi", "z": "a0" } },
+            { "id": "1:b", "props": { "type": "SHAPE_TYPE_TEXT", "text": "title", "z": "a1", "strokeWidth": 1.5 } }
+          ]
+        },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 2 }, "ops": [{ "id": "1:a", "props": { "text": "hello" } }] },
+        { "stamp": { "wallMs": 200, "counter": 1, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "text": "hey" } }, { "id": "1:b", "props": { "z": "Zz" } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_STICKY", "z": "a0", "text": "hey" },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 130 },
+            { "stamp": { "wallMs": 200, "counter": 1, "clientId": 1 }, "fieldMask": 2048 }
+          ]
+        },
+        {
+          "id": "1:b",
+          "props": { "type": "SHAPE_TYPE_TEXT", "z": "Zz", "strokeWidth": 1.5, "text": "title" },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 3074 },
+            { "stamp": { "wallMs": 200, "counter": 1, "clientId": 1 }, "fieldMask": 128 }
+          ]
+        }
+      ]
+    }
+  ]
+}

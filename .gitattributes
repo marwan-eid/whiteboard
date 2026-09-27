@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.gif binary
+
+# Generated code: collapse in diffs.
+internal/pb/** linguist-generated=true
+web/src/gen/** linguist-generated=true

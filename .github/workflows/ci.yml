@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+          args: --build-tags=e2e
+      # Integration tests start Postgres with testcontainers (Docker is available on ubuntu-latest).
+      - run: go test -race -count=1 ./...
+
+  web:
+    name: Web lint + test + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  proto:
+    name: Generated code up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run gen
+      - name: Fail if generated code or proto formatting changed
+        run: git diff --exit-code -- proto internal/pb web/src/gen
+
+  smoke:
+    name: Compose stack smoke test
+    needs: [go, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Start stack
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - run: curl -fsS http://localhost:8080/healthz && curl -fsS http://localhost:8080/readyz
+      - name: 200 simulated clients through Caddy
+        run: go run ./cmd/loadgen -url ws://localhost:8080/ws -clients 200 -duration 5s -ramp 2s -ping-interval 500ms
+      - name: Browser smoke test
+        run: |
+          npm ci --ignore-scripts
+          npx -w web playwright install --with-deps chromium
+          npm -w web run e2e
+      - name: SIGKILL the node mid-edit, no acked edit lost
+        run: go test -tags e2e -count=1 -v ./test/e2e/
+      - if: failure()
+        run: docker compose logs
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: web/test-results
+          if-no-files-found: ignore
+      - if: always()
+        run: docker compose down -v

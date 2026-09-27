@@ -1,0 +1,128 @@
+package store_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"google.golang.org/protobuf/proto"
+
+	"whiteboard/internal/board"
+	"whiteboard/internal/db"
+	"whiteboard/internal/db/dbtest"
+	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/store"
+)
+
+func newStore(t *testing.T) *store.Postgres {
+	t.Helper()
+	pool := dbtest.NewPool(t)
+	if _, err := db.Migrate(context.Background(), pool); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.NewPostgres(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func entry(seq, client, clientSeq uint64, x float64) board.LogEntry {
+	return board.LogEntry{
+		Seq: seq, ClientID: client, ClientSeq: clientSeq,
+		Stamp: &pb.Stamp{WallMs: int64(1000 + seq), ClientId: client},
+		Ops:   []*pb.Op{{Id: "a:1", Props: &pb.ObjectProps{X: proto.Float64(x)}}},
+	}
+}
+
+func TestStore(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	t.Run("new board loads empty", func(t *testing.T) {
+		l, err := s.Load(ctx, "fresh")
+		if err != nil || l.Snapshot != nil || len(l.Tail) != 0 {
+			t.Fatalf("got %+v, %v", l, err)
+		}
+	})
+
+	t.Run("appended entries load back in order", func(t *testing.T) {
+		if _, err := s.Load(ctx, "b1"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Append(ctx, "b1", []board.LogEntry{entry(1, 10, 1, 1), entry(2, 11, 1, 2)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Append(ctx, "b1", []board.LogEntry{entry(3, 10, 2, 3)}); err != nil {
+			t.Fatal(err)
+		}
+		l, err := s.Load(ctx, "b1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(l.Tail) != 3 {
+			t.Fatalf("tail has %d entries", len(l.Tail))
+		}
+		for i, e := range l.Tail {
+			want := entry(uint64(i+1), e.ClientID, e.ClientSeq, float64(i+1))
+			if e.Seq != want.Seq || !proto.Equal(e.Stamp, want.Stamp) || !proto.Equal(e.Ops[0], want.Ops[0]) {
+				t.Fatalf("entry %d = %+v", i, e)
+			}
+		}
+		if l.Tail[2].ClientID != 10 || l.Tail[2].ClientSeq != 2 {
+			t.Fatalf("client columns lost: %+v", l.Tail[2])
+		}
+	})
+
+	t.Run("a second writer at the same seq conflicts and writes nothing", func(t *testing.T) {
+		if _, err := s.Load(ctx, "b2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Append(ctx, "b2", []board.LogEntry{entry(1, 10, 1, 1)}); err != nil {
+			t.Fatal(err)
+		}
+		err := s.Append(ctx, "b2", []board.LogEntry{entry(2, 10, 2, 2), entry(1, 11, 1, 9)})
+		if !errors.Is(err, board.ErrConflict) {
+			t.Fatalf("err = %v, want ErrConflict", err)
+		}
+		l, _ := s.Load(ctx, "b2")
+		if len(l.Tail) != 1 {
+			t.Fatalf("partial write: tail has %d entries, want 1", len(l.Tail))
+		}
+	})
+
+	t.Run("load returns the latest snapshot and only the log after it", func(t *testing.T) {
+		if _, err := s.Load(ctx, "b3"); err != nil {
+			t.Fatal(err)
+		}
+		for i := uint64(1); i <= 5; i++ {
+			if err := s.Append(ctx, "b3", []board.LogEntry{entry(i, 10, i, float64(i))}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, seq := range []uint64{2, 4} {
+			snap := &pb.BoardSnapshot{
+				Seq:     seq,
+				Objects: []*pb.ObjectState{{Id: "a:1", Props: &pb.ObjectProps{X: proto.Float64(float64(seq))}}},
+				Clients: []*pb.ClientProgress{{ClientId: 10, LastClientSeq: seq}},
+			}
+			if err := s.SaveSnapshot(ctx, "b3", snap); err != nil {
+				t.Fatal(err)
+			}
+		}
+		l, err := s.Load(ctx, "b3")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if l.Snapshot.GetSeq() != 4 || l.Snapshot.GetClients()[0].GetLastClientSeq() != 4 {
+			t.Fatalf("snapshot = %v", l.Snapshot)
+		}
+		if len(l.Tail) != 1 || l.Tail[0].Seq != 5 {
+			t.Fatalf("tail = %+v, want only seq 5", l.Tail)
+		}
+		// Saving the same snapshot again is harmless.
+		if err := s.SaveSnapshot(ctx, "b3", l.Snapshot); err != nil {
+			t.Fatal(err)
+		}
+	})
+}

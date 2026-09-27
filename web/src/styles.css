@@ -1,0 +1,67 @@
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --bad: #cf222e;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status .muted {
+  color: var(--muted);
+}
+
+.status[data-status="connected"] .dot {
+  background: var(--ok);
+}
+.status[data-status="connecting"] .dot,
+.status[data-status="reconnecting"] .dot {
+  background: var(--warn);
+}
+.status[data-status="rejected"] .dot {
+  background: var(--bad);
+}
