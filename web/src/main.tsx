@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { boardIdFromPath, wsUrl } from "./board";
+import { boardIdFromPath, shareTokenFromHash, wsUrl } from "./board";
 import { Camera } from "./canvas/camera";
 import { Editor } from "./canvas/editor";
 import { FrameScheduler } from "./canvas/frames";
@@ -9,7 +9,8 @@ import { createStage } from "./canvas/stage";
 import { TextEditor } from "./canvas/textEditor";
 import { ViewportTracker } from "./canvas/viewport";
 import { Controller } from "./canvas/tools";
-import { ShapeType } from "./gen/whiteboard/v1/protocol_pb";
+import { Role, ShapeType } from "./gen/whiteboard/v1/protocol_pb";
+import { Api } from "./net/api";
 import { Connection, type ConnectionHandlers } from "./net/connection";
 import { randomClientId } from "./net/protocol";
 import { isVisible, type Doc } from "./sync/doc";
@@ -17,12 +18,17 @@ import { History } from "./sync/history";
 import { HistoryView } from "./sync/historyView";
 import { Presence } from "./sync/presence";
 import { SyncSession } from "./sync/session";
+import { BoardMenu } from "./ui/BoardMenu";
 import { HistoryPanel } from "./ui/HistoryPanel";
 import { StatusBadge } from "./ui/StatusBadge";
 import { Toolbar } from "./ui/Toolbar";
 
 const boardId = boardIdFromPath(location.pathname);
 const clientId = randomClientId();
+// A share link carries its token in the URL fragment, which never reaches server logs.
+const shareToken = shareTokenFromHash(location.hash);
+const api = new Api();
+let guestToken = "";
 
 // The connection delivers board traffic to the session, which sends through
 // the connection; they are wired through these handlers.
@@ -32,7 +38,14 @@ const uiHost = document.getElementById("ui")!;
 const viewport = new ViewportTracker(camera, () => ({ w: stageHost.clientWidth || window.innerWidth, h: stageHost.clientHeight || window.innerHeight }));
 
 const handlers: Partial<ConnectionHandlers> = {};
-const connection = new Connection({ url: wsUrl(location), boardId, clientId, handlers, viewport: () => viewport.current });
+const connection = new Connection({
+  url: wsUrl(location),
+  boardId,
+  clientId,
+  handlers,
+  viewport: () => viewport.current,
+  credentials: () => ({ guestToken, shareToken }),
+});
 viewport.subscribe(() => connection.sendViewport());
 window.addEventListener("resize", () => viewport.check());
 const sync = new SyncSession({
@@ -42,9 +55,16 @@ const sync = new SyncSession({
   resync: () => connection.resync(),
 });
 const presence = new Presence((p) => connection.sendCursor(p.x, p.y));
+const editor = new Editor();
+let role = Role.UNSPECIFIED;
 handlers.onWelcome = (w) => {
   sync.onWelcome(w);
   presence.reset();
+  if (w.role !== role) {
+    role = w.role;
+    editor.setViewOnly(role === Role.VIEWER);
+    renderUI();
+  }
 };
 handlers.onFrame = (f) => {
   sync.onFrame(f);
@@ -56,20 +76,27 @@ const historyView = new HistoryView({
   head: () => sync.seq,
 });
 handlers.onHistory = (h) => historyView.onHistory(h);
-connection.start();
+// Connect once we know who we are (a first visit asks the server for a guest identity).
+void api.guestToken().then((t) => {
+  guestToken = t;
+  connection.start();
+});
 
-const editor = new Editor();
 const history = new History(sync);
 const center = () => ({ x: stageHost.clientWidth / 2, y: stageHost.clientHeight / 2 });
 
-render(
-  <>
-    <StatusBadge connection={connection} session={sync} presence={presence} boardId={boardId} />
-    <Toolbar editor={editor} history={history} camera={camera} center={center} onOpenHistory={() => historyView.open()} />
-    <HistoryPanel view={historyView} />
-  </>,
-  uiHost,
-);
+function renderUI(): void {
+  render(
+    <>
+      <StatusBadge connection={connection} session={sync} presence={presence} boardId={boardId} viewOnly={role === Role.VIEWER} />
+      <Toolbar editor={editor} history={history} camera={camera} center={center} onOpenHistory={() => historyView.open()} />
+      <HistoryPanel view={historyView} canRestore={role !== Role.VIEWER} />
+      <BoardMenu api={api} boardId={boardId} role={role} />
+    </>,
+    uiHost,
+  );
+}
+renderUI();
 
 createStage(stageHost, camera)
   .then((app) => {

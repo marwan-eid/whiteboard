@@ -194,3 +194,102 @@ body {
   opacity: 0.4;
   cursor: default;
 }
+
+.board-menu {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.board-menu button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.board-menu button.primary {
+  background: #0969da;
+  border-color: #0969da;
+  color: #fff;
+}
+
+.board-menu .panel {
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 4px 14px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+
+.board-menu h3 {
+  margin: 12px 0 8px;
+  font-size: 14px;
+}
+
+.board-menu p {
+  margin: 6px 0;
+}
+
+.board-menu ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-menu li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.board-menu li > :first-child {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-menu a[aria-current="page"] {
+  font-weight: 600;
+}
+
+.board-menu .row {
+  display: flex;
+  gap: 8px;
+}
+
+.board-menu .fresh {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.board-menu .fresh input {
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.board-menu .muted {
+  color: var(--muted);
+}
+
+.board-menu .error {
+  color: var(--bad);
+}

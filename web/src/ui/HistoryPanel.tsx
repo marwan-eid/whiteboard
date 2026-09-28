@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { HistoryView } from "../sync/historyView";
 
 /** The version slider shown in history mode. */
-export function HistoryPanel({ view }: { view: HistoryView }) {
+export function HistoryPanel({ view, canRestore }: { view: HistoryView; canRestore: boolean }) {
   const [, setTick] = useState(0);
   useEffect(() => view.subscribe(() => setTick((t) => t + 1)), [view]);
   if (!view.active) return null;
@@ -27,9 +27,11 @@ export function HistoryPanel({ view }: { view: HistoryView }) {
         onInput={(e) => view.seek(Number((e.target as HTMLInputElement).value))}
       />
       <div class="history-row">
-        <button class="primary" disabled={view.seq >= view.head || view.loading} onClick={() => view.restore()}>
-          Restore this version
-        </button>
+        {canRestore && (
+          <button class="primary" disabled={view.seq >= view.head || view.loading} onClick={() => view.restore()}>
+            Restore this version
+          </button>
+        )}
         <button onClick={() => view.close()}>Back to live</button>
       </div>
     </div>

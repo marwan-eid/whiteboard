@@ -12,7 +12,9 @@ Requires Docker.
 docker compose up --build
 ```
 
-Then open http://localhost:8080 in two browser windows. Open `/b/<any-id>` to join a specific board.
+Then open http://localhost:8080 in two browser windows. Open `/b/<any-id>` to join a specific board; anyone with the id can edit it. For a private board, use **Boards → New private board**, then **Share** to make view or edit links (revocable).
+
+For anything reachable by others, set your own `SECRET` (it signs guest identities): `SECRET=$(openssl rand -hex 32) docker compose up --build`.
 
 | Action | How |
 |---|---|

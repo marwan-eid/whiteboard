@@ -11,6 +11,7 @@ import {
   encodeRestore,
   encodeTimePing,
   encodeViewport,
+  type Credentials,
   type ViewportRect,
 } from "./protocol";
 
@@ -46,6 +47,8 @@ export interface ConnectionOptions {
   handlers?: Partial<ConnectionHandlers>;
   /** The region to receive (the whole board if it returns undefined). */
   viewport?: () => ViewportRect | undefined;
+  /** Sent in every Hello. */
+  credentials?: () => Credentials;
   pingIntervalMs?: number;
   createSocket?: (url: string) => SocketLike;
   /** Monotonic clock in ms, used for RTT. */
@@ -57,9 +60,9 @@ export interface ConnectionOptions {
 
 type Listener = (state: ConnectionState) => void;
 
-// Errors that retrying cannot fix: bugs, version skew, or another tab
-// taking over our client id.
-const FATAL_ERRORS = new Set([ErrorCode.UNSUPPORTED_VERSION, ErrorCode.BAD_REQUEST, ErrorCode.CLIENT_ID_IN_USE]);
+// Errors that retrying cannot fix: bugs, version skew, another tab taking
+// over our client id, or no access to the board.
+const FATAL_ERRORS = new Set([ErrorCode.UNSUPPORTED_VERSION, ErrorCode.BAD_REQUEST, ErrorCode.CLIENT_ID_IN_USE, ErrorCode.FORBIDDEN]);
 
 /**
  * One logical connection to a board: handshakes, estimates RTT and server
@@ -86,6 +89,7 @@ export class Connection {
       random: Math.random,
       handlers: {},
       viewport: () => undefined,
+      credentials: () => ({}),
       ...opts,
     };
   }
@@ -174,7 +178,7 @@ export class Connection {
     this.welcomed = false;
     let rejectedReason: string | null = null;
 
-    socket.onopen = () => socket.send(encodeHello(this.opts.boardId, this.opts.clientId, this.opts.viewport()));
+    socket.onopen = () => socket.send(encodeHello(this.opts.boardId, this.opts.clientId, this.opts.viewport(), this.opts.credentials()));
 
     socket.onmessage = (ev) => {
       if (!(ev.data instanceof ArrayBuffer)) return;

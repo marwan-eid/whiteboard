@@ -16,7 +16,8 @@ export class Editor {
   readonly selection = new Set<string>();
   private _tool: ToolId = "select";
   private _editing: string | null = null;
-  private _readOnly = false;
+  private _historyMode = false;
+  private _viewOnly = false;
   private readonly listeners = new Set<() => void>();
 
   get tool(): ToolId {
@@ -28,14 +29,31 @@ export class Editor {
     return this._editing;
   }
 
-  /** History mode: the canvas can be panned and zoomed but not edited. */
+  /** The canvas can be panned and zoomed but not edited (history mode or view-only access). */
   get readOnly(): boolean {
-    return this._readOnly;
+    return this._historyMode || this._viewOnly;
+  }
+
+  /** View-only access: this client may not change the board. */
+  get viewOnly(): boolean {
+    return this._viewOnly;
   }
 
   setReadOnly(on: boolean): void {
-    this._readOnly = on;
-    if (on) this.selection.clear();
+    this._historyMode = on;
+    this.readOnlyChanged();
+  }
+
+  setViewOnly(on: boolean): void {
+    this._viewOnly = on;
+    this.readOnlyChanged();
+  }
+
+  private readOnlyChanged(): void {
+    if (this.readOnly) {
+      this.selection.clear();
+      this._tool = "select";
+    }
     this.changed();
   }
 

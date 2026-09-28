@@ -21,10 +21,16 @@ export interface ViewportRect {
   lod: boolean;
 }
 
-export function encodeHello(boardId: string, clientId: number, viewport?: ViewportRect): Uint8Array<ArrayBuffer> {
+/** Who is connecting: a signed guest identity and/or a share link token. */
+export interface Credentials {
+  guestToken?: string;
+  shareToken?: string;
+}
+
+export function encodeHello(boardId: string, clientId: number, viewport?: ViewportRect, creds: Credentials = {}): Uint8Array<ArrayBuffer> {
   return encode(
     create(ClientMessageSchema, {
-      msg: { case: "hello", value: { protocolVersion: PROTOCOL_VERSION, boardId, clientId: BigInt(clientId), viewport } },
+      msg: { case: "hello", value: { protocolVersion: PROTOCOL_VERSION, boardId, clientId: BigInt(clientId), viewport, ...creds } },
     }),
   );
 }

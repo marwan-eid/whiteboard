@@ -85,12 +85,11 @@ erDiagram
   boards ||--o{ snapshots : has
   boards ||--o| board_leases : "owned via"
   boards ||--o{ share_links : has
-  users ||--o{ boards : owns
   nodes ||--o{ board_leases : holds
 
   boards {
     text id PK "URL-safe, e.g. demo"
-    uuid owner_id FK
+    text owner_id "guest id; null for public boards"
     text title
     text visibility "public | private"
     bigint head_seq
@@ -127,18 +126,16 @@ erDiagram
     timestamptz heartbeat_at
   }
   share_links {
-    uuid id PK
+    text id PK
     text board_id FK
-    bytea token_hash
-    text role "view | edit"
+    bytea token_hash "sha256, unique"
+    text role "viewer | editor"
+    timestamptz created_at
     timestamptz revoked_at
   }
-  users {
-    uuid id PK
-    text kind "guest | github"
-    timestamptz created_at
-  }
 ```
+
+There is no users table: a guest id lives only in its signed token, and `boards.owner_id` holds it. Accounts (GitHub sign-in) are later scope.
 
 Timers and votes are stored as ops in the same log, with their own op types, so replay includes them.
 
@@ -148,16 +145,16 @@ The schema is [proto/whiteboard/v1/protocol.proto](../proto/whiteboard/v1/protoc
 
 | Direction | Message | Purpose | Since |
 |---|---|---|---|
-| Client → server | `Hello{boardId, clientId, viewport}` | Join or rejoin a board. A missing viewport means the whole board. The guest token comes later. | W0/W1 (viewport W4) |
+| Client → server | `Hello{boardId, clientId, viewport, guestToken, shareToken}` | Join or rejoin a board. A missing viewport means the whole board. The tokens say who is joining (3.9). | W0/W1 (viewport W4, tokens W6) |
 | Client → server | `OpBatch{clientSeq, stamp, ops}` | Send edits. | W1 |
 | Client → server | `TimePing{t0}` | RTT and clock-offset estimation. | W0 |
 | Client → server | `Viewport{x, y, w, h, lod}` | Change the region the client receives. It is ordered with the client's batches. | W4 |
 | Client → server | `Cursor{x, y}` | Presence. | W3 |
 | Client → server | `HistoryAt{seq}` | Request board state at a point in history. | W5 |
-| Server → client | `Welcome{seq, objects, lastClientSeq, serverTime, online}` | Snapshot of the objects in the viewport, for (re)joining. `lastClientSeq` tells a reconnecting client which pending batches the server already applied. | W1 |
+| Server → client | `Welcome{seq, objects, lastClientSeq, serverTime, online, role}` | Snapshot of the objects in the viewport, for (re)joining. `lastClientSeq` tells a reconnecting client which pending batches the server already applied. `role` is viewer, editor or owner. | W1 (role W6) |
 | Server → client | `Frame{batches[], acks[], cursors[], objects[], leave[], online, seq}` | Per-tick delivery. It carries:<br>• the ops of other clients' batches on objects this client holds, in seq order<br>• acks for its own batches: the stamp each was applied with, or `rejected`<br>• nearby cursors that moved or left<br>• objects entering its view, in full<br>• ids of objects leaving its view<br>• the online count<br>• the board seq | W1 (cursors W3, the rest W4) |
 | Server → client | `TimePong{t0, serverTime}` | Clock-offset reply. | W0 |
-| Server → client | `ServerError{code, message}` | Sent before closing; codes that retrying can't fix (`UNSUPPORTED_VERSION`, `BAD_REQUEST`, `CLIENT_ID_IN_USE`) stop reconnection. | W0/W1 |
+| Server → client | `ServerError{code, message}` | Sent before closing; codes that retrying can't fix (`UNSUPPORTED_VERSION`, `BAD_REQUEST`, `CLIENT_ID_IN_USE`, `FORBIDDEN`) stop reconnection. | W0/W1 (`FORBIDDEN` W6) |
 | Server → client | `Moved{nodeId}` | Wrong node; the client should re-route. | W8 |
 
 ## 3. Data flows
@@ -281,14 +278,20 @@ sequenceDiagram
 - **Results:** tallies are hidden until the session ends or the owner reveals them.
 
 ### 3.9 Auth, permissions, abuse
-- **Guest identity:** on first visit the server issues a signed guest token (HMAC), stored in localStorage. No signup.
-- **Roles:** owner, editor, or viewer.
-  - Owner: the board's creator.
+Built in W6 (`internal/access`), except the rate limits.
+- **Guest identity:** on first visit the client calls `POST /api/guest` and keeps the token in localStorage. The token is `<guestId>.<HMAC-SHA256(guestId)>`, keyed by the `SECRET` setting, so the server stores nothing per guest. No signup. A forged or stale token just means anonymous.
+- **Visibility:**
+  - Visiting an unknown board id creates a **public** board: anyone with the id can edit it (the demo board works this way).
+  - A board made with "New private board" (`POST /api/boards`) is **private**: only its owner and holders of a share link can open it. Anyone else gets `FORBIDDEN` and the client stops reconnecting.
+- **Roles:** owner, editor, or viewer, decided once per connection and sent in the `Welcome`.
+  - Owner: the guest who created the board. Only the owner can manage links.
   - Editor or viewer: granted by a **share link**.
+  - The server enforces the role: a viewer's `OpBatch` or `Restore` is answered with `FORBIDDEN` and the socket is closed. The client also disables editing.
 - **Share links:**
   - Format: `/b/{boardId}#k={token}`. The token is in the URL fragment, so it never appears in server logs or Referer headers.
-  - The server stores only a hash of the token. The owner can revoke a link.
-- **Visibility:** a public board is readable by anyone with its id. The demo board is public and editable.
+  - The server stores only a SHA-256 hash of the token, and the owner sees the link once, when it is created.
+  - Revoking a link (`DELETE /api/boards/{id}/links/{link}`) also disconnects everyone connected through it, at once: the board actor knows which link each connection came in on.
+- **HTTP API:** `POST /api/guest`; `GET|POST /api/boards` (my boards, new private board); `GET|POST /api/boards/{id}/links`; `DELETE /api/boards/{id}/links/{link}`. All but the first take `Authorization: Bearer <guest token>`.
 - **Rate limits (token buckets):**
   - Per connection: ops/s, bytes/s, cursor Hz.
   - Per IP: connections, board creations per hour.

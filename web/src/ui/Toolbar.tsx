@@ -44,6 +44,7 @@ export function Toolbar({
           <button
             key={t.id}
             class={editor.tool === t.id ? "active" : ""}
+            disabled={editor.readOnly && t.id !== "select" && t.id !== "hand"}
             title={`${t.label} (${t.key.toUpperCase()})`}
             aria-label={t.label}
             aria-pressed={editor.tool === t.id}
@@ -54,10 +55,10 @@ export function Toolbar({
           </button>
         ))}
         <span class="sep" />
-        <button title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!history.canUndo} onClick={() => history.undo()}>
+        <button title="Undo (Ctrl+Z)" aria-label="Undo" disabled={editor.readOnly || !history.canUndo} onClick={() => history.undo()}>
           ↶
         </button>
-        <button title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!history.canRedo} onClick={() => history.redo()}>
+        <button title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={editor.readOnly || !history.canRedo} onClick={() => history.redo()}>
           ↷
         </button>
         <span class="sep" />

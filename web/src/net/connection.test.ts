@@ -90,6 +90,7 @@ describe("Connection", () => {
       },
       now: () => clock,
       random: () => 1,
+      credentials: () => ({ guestToken: "g.sig", shareToken: "share" }),
     });
     conn.subscribe((s) => states.push(s));
   });
@@ -106,7 +107,7 @@ describe("Connection", () => {
     latest().serverOpen();
     const hello = latest().sent[0]?.msg;
     expect(hello?.case).toBe("hello");
-    expect(hello?.value).toMatchObject({ boardId: "demo", clientId: 7n, protocolVersion: PROTOCOL_VERSION });
+    expect(hello?.value).toMatchObject({ boardId: "demo", clientId: 7n, protocolVersion: PROTOCOL_VERSION, guestToken: "g.sig", shareToken: "share" });
 
     latest().serverSend(welcome("node-1"));
     expect(conn.state).toEqual({ status: "connected", nodeId: "node-1", rttMs: null });
@@ -236,6 +237,16 @@ describe("Connection", () => {
     });
     latest().serverClose();
     expect(conn.state).toEqual({ status: "rejected", reason: "replaced" });
+    vi.advanceTimersByTime(60_000);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("stops when access is denied or revoked", () => {
+    conn.start();
+    latest().serverOpen();
+    latest().serverSend({ case: "error", value: create(ServerErrorSchema, { code: ErrorCode.FORBIDDEN, message: "access revoked" }) });
+    latest().serverClose();
+    expect(conn.state).toEqual({ status: "rejected", reason: "access revoked" });
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
   });

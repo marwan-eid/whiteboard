@@ -11,3 +11,13 @@ export function boardIdFromPath(pathname: string): string {
 export function wsUrl(loc: Pick<Location, "protocol" | "host">): string {
   return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/ws`;
 }
+
+/** The share link token from a "#k=<token>" URL fragment. */
+export function shareTokenFromHash(hash: string): string {
+  return new URLSearchParams(hash.replace(/^#/, "")).get("k") ?? "";
+}
+
+/** The URL that opens a board through a share link. */
+export function shareUrl(origin: string, boardId: string, token: string): string {
+  return `${origin}/b/${boardId}#k=${encodeURIComponent(token)}`;
+}
