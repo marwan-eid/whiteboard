@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"whiteboard/internal/access"
 	"whiteboard/internal/metrics"
 )
 
@@ -18,6 +19,11 @@ type Deps struct {
 	Metrics *metrics.Metrics
 	// Ready reports whether the node can serve traffic (e.g. Postgres reachable).
 	Ready func(context.Context) error
+	// Signer and Boards enable the /api/guest and /api/boards endpoints.
+	Signer *access.Signer
+	Boards Boards
+	// KickLink disconnects a revoked link's live users.
+	KickLink func(boardID, linkID string)
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -46,6 +52,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
 	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+
+	if d.Signer != nil && d.Boards != nil {
+		(&boardAPI{signer: d.Signer, boards: d.Boards, kickLink: d.KickLink}).register(mux)
+	}
 
 	mux.Handle("GET /ws", d.Gateway)
 	return mux

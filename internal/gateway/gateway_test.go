@@ -25,6 +25,7 @@ var fixedNow = time.UnixMilli(1_700_000_000_000)
 
 type harness struct {
 	gw      *Gateway
+	boards  *board.Registry
 	metrics *metrics.Metrics
 	url     string
 }
@@ -39,7 +40,7 @@ func newHarness(t *testing.T, cfg Config) *harness {
 	gw := New(cfg, boards, log, m)
 	srv := httptest.NewServer(gw)
 	t.Cleanup(srv.Close)
-	return &harness{gw: gw, metrics: m, url: "ws" + strings.TrimPrefix(srv.URL, "http")}
+	return &harness{gw: gw, boards: boards, metrics: m, url: "ws" + strings.TrimPrefix(srv.URL, "http")}
 }
 
 func (h *harness) dial(t *testing.T) *websocket.Conn {

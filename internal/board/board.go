@@ -45,6 +45,9 @@ const (
 	KickReplaced
 	// KickReload: the board failed or is shutting down; reconnect and resync.
 	KickReload
+	// KickRevoked: the share link the client joined with was revoked; it must
+	// not reconnect with it.
+	KickRevoked
 )
 
 // Conn is the board's handle on a client connection.
@@ -160,8 +163,12 @@ type Board struct {
 type joinMsg struct {
 	conn     Conn
 	viewport *pb.Viewport
+	role     pb.Role
+	linkID   string
 	reply    chan error
 }
+
+type kickLinkMsg struct{ linkID string }
 
 type leaveMsg struct{ conn Conn }
 
@@ -242,9 +249,9 @@ func (b *Board) send(ctx context.Context, m any) error {
 	}
 }
 
-func (b *Board) join(ctx context.Context, c Conn, viewport *pb.Viewport) error {
+func (b *Board) join(ctx context.Context, c Conn, viewport *pb.Viewport, role pb.Role, linkID string) error {
 	reply := make(chan error, 1)
-	if err := b.send(ctx, joinMsg{conn: c, viewport: viewport, reply: reply}); err != nil {
+	if err := b.send(ctx, joinMsg{conn: c, viewport: viewport, role: role, linkID: linkID, reply: reply}); err != nil {
 		return err
 	}
 	select {
@@ -415,13 +422,21 @@ func (b *Board) handle(m any) {
 			b.remove(old.conn)
 		}
 		view, lod := viewRect(m.viewport)
-		c := &clientState{conn: m.conn, view: view, lod: lod, moves: map[string]bool{}}
+		c := &clientState{conn: m.conn, view: view, lod: lod, moves: map[string]bool{}, role: m.role, linkID: m.linkID}
 		b.clients[id] = c
 		b.joining = append(b.joining, c)
 		b.onlineChanged = true
 		m.reply <- nil
 	case leaveMsg:
 		b.remove(m.conn)
+	case kickLinkMsg:
+		for _, c := range b.clients {
+			if c.linkID == m.linkID {
+				b.metrics.ClientsKicked.WithLabelValues("revoked").Inc()
+				c.conn.Kick(KickRevoked)
+				b.remove(c.conn)
+			}
+		}
 	case batchMsg:
 		b.apply(m.clientID, m.batch, m.received)
 	case viewportMsg:
@@ -590,6 +605,7 @@ func (b *Board) flush() error {
 			Objects:         b.objectsIn(c.view, c.lod),
 			LastClientSeq:   b.lastClientSeq[c.conn.ClientID()],
 			Online:          uint32(len(b.clients)),
+			Role:            c.role,
 		}}})
 		c.presenceStale = true // cursors reach a joiner on its next frame
 	}

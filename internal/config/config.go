@@ -19,6 +19,9 @@ type Config struct {
 	NodeID string
 	// LogLevel is one of debug, info, warn, error (LOG_LEVEL, default info).
 	LogLevel slog.Level
+	// Secret signs guest tokens (SECRET). Every node must share it. If unset,
+	// the node makes a random one, and guest tokens stop working on restart.
+	Secret string
 }
 
 // FromEnv loads the config from the process environment.
@@ -32,6 +35,7 @@ func Load(getenv func(string) string, hostname func() (string, error)) (Config, 
 		Addr:        getenv("ADDR"),
 		DatabaseURL: getenv("DATABASE_URL"),
 		NodeID:      getenv("NODE_ID"),
+		Secret:      getenv("SECRET"),
 	}
 	if cfg.Addr == "" {
 		cfg.Addr = ":8081"

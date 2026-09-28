@@ -40,6 +40,8 @@ type clientState struct {
 	moves map[string]bool
 	// Cursors this client is currently shown.
 	shownCursors map[uint64]struct{}
+	role         pb.Role
+	linkID       string // share link used to join, if any
 	// presenceStale forces a cursor recompute on the next frame (after joining
 	// or moving the viewport).
 	presenceStale bool

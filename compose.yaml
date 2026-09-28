@@ -29,6 +29,8 @@ services:
       DATABASE_URL: postgres://whiteboard:${POSTGRES_PASSWORD:-whiteboard}@postgres:5432/whiteboard?sslmode=disable
       NODE_ID: node-1
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Signs guest tokens. Set your own for anything public: SECRET=... docker compose up
+      SECRET: ${SECRET:-dev-only-secret-change-me}
     depends_on:
       postgres:
         condition: service_healthy

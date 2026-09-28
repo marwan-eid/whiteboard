@@ -40,6 +40,10 @@ message Hello {
   uint64 client_id = 3;
   // The region to receive; unset means the whole board.
   Viewport viewport = 4;
+  // Signed guest identity from POST /api/guest (optional for public boards).
+  string guest_token = 5;
+  // A share link's token, for private boards.
+  string share_token = 6;
 }
 
 message Welcome {
@@ -55,6 +59,15 @@ message Welcome {
   uint64 last_client_seq = 6;
   // Clients on the board, including this one.
   uint32 online = 7;
+  // What this client may do; viewers cannot edit or restore.
+  Role role = 8;
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_VIEWER = 1;
+  ROLE_EDITOR = 2;
+  ROLE_OWNER = 3;
 }
 
 // Clock-offset and RTT probe. The server echoes t0 and adds its own clock.
@@ -73,6 +86,8 @@ enum ErrorCode {
   ERROR_CODE_UNSUPPORTED_VERSION = 2;
   // Another live connection on this board uses the same client_id.
   ERROR_CODE_CLIENT_ID_IN_USE = 3;
+  // No access to this board (private, or the share link was revoked).
+  ERROR_CODE_FORBIDDEN = 4;
 }
 
 message ServerError {

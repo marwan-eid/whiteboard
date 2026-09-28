@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"whiteboard/internal/access"
 	"whiteboard/internal/board"
 	"whiteboard/internal/config"
 	"whiteboard/internal/db"
@@ -67,15 +69,27 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	secret := []byte(cfg.Secret)
+	if len(secret) == 0 {
+		secret = make([]byte, 32)
+		_, _ = rand.Read(secret)
+		log.Warn("SECRET is not set; using a random one, so guest tokens will not survive a restart")
+	}
+	signer := access.NewSigner(secret)
+	accessStore := access.NewPostgres(pool)
+
 	m := metrics.New()
 	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st}, log, m)
-	gw := gateway.New(gateway.Config{}, boards, log, m)
+	gw := gateway.New(gateway.Config{Authorizer: accessStore, Signer: signer}, boards, log, m)
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Gateway: gw,
-			Metrics: m,
-			Ready:   pool.Ping,
+			Gateway:  gw,
+			Metrics:  m,
+			Ready:    pool.Ping,
+			Signer:   signer,
+			Boards:   accessStore,
+			KickLink: boards.KickLink,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

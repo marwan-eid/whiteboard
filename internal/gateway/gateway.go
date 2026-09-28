@@ -16,6 +16,7 @@ import (
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"whiteboard/internal/access"
 	"whiteboard/internal/board"
 	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
@@ -34,7 +35,11 @@ type Config struct {
 	SendQueue int
 	// MinCursorInterval drops cursor updates that arrive faster than this.
 	MinCursorInterval time.Duration
-	Now               func() time.Time
+	// Authorizer decides board access (default: everyone may edit).
+	Authorizer access.Authorizer
+	// Signer verifies guest tokens (default: tokens are ignored).
+	Signer *access.Signer
+	Now    func() time.Time
 }
 
 type Gateway struct {
@@ -61,6 +66,9 @@ func New(cfg Config, boards *board.Registry, log *slog.Logger, m *metrics.Metric
 	}
 	if cfg.SendQueue == 0 {
 		cfg.SendQueue = 256
+	}
+	if cfg.Authorizer == nil {
+		cfg.Authorizer = access.Open{}
 	}
 	if cfg.MinCursorInterval == 0 {
 		cfg.MinCursorInterval = 40 * time.Millisecond
@@ -130,8 +138,21 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "invalid viewport")
 	}
 
+	var guestID string
+	if g.cfg.Signer != nil && hello.GetGuestToken() != "" {
+		guestID, _ = g.cfg.Signer.Verify(hello.GetGuestToken()) // an invalid token just means anonymous
+	}
+	grant, err := g.cfg.Authorizer.Authorize(ctx, hello.GetBoardId(), guestID, hello.GetShareToken())
+	if errors.Is(err, access.ErrForbidden) {
+		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "no access to this board")
+	}
+	if err != nil {
+		_ = c.Close(websocket.StatusTryAgainLater, "board unavailable")
+		return err
+	}
+
 	conn := &clientConn{id: hello.GetClientId(), ws: c, send: make(chan []byte, g.cfg.SendQueue), writeTimeout: g.cfg.WriteTimeout}
-	b, err := g.boards.Join(ctx, hello.GetBoardId(), conn, hello.GetViewport())
+	b, err := g.boards.JoinAs(ctx, hello.GetBoardId(), conn, hello.GetViewport(), grant.Role, grant.LinkID)
 	if err != nil {
 		// Usually the board failed to load (database down); the client retries with backoff.
 		_ = c.Close(websocket.StatusTryAgainLater, "board unavailable")
@@ -181,6 +202,9 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 				conn.Kick(board.KickSlow)
 			}
 		case *pb.ClientMessage_OpBatch:
+			if !grant.CanEdit() {
+				return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "view-only access")
+			}
 			if err := b.Submit(ctx, conn.id, m.OpBatch); err != nil {
 				return err
 			}
@@ -199,6 +223,9 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 			}
 			history <- historyJob{seq: m.History.GetSeq(), view: view}
 		case *pb.ClientMessage_Restore:
+			if !grant.CanEdit() {
+				return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "view-only access")
+			}
 			if err := b.Restore(ctx, m.Restore.GetSeq()); err != nil {
 				g.log.Warn("restore failed", "seq", m.Restore.GetSeq(), "err", err)
 			}
@@ -328,6 +355,9 @@ func (c *clientConn) Kick(reason board.KickReason) {
 					cancel()
 				}
 				_ = c.ws.Close(websocket.StatusPolicyViolation, "client id in use")
+			case board.KickRevoked:
+				c.sendError(pb.ErrorCode_ERROR_CODE_FORBIDDEN, "access revoked")
+				_ = c.ws.Close(websocket.StatusPolicyViolation, "access revoked")
 			case board.KickReload:
 				_ = c.ws.Close(websocket.StatusTryAgainLater, "board reloading")
 			default:
@@ -358,4 +388,15 @@ func (g *Gateway) historyLoop(ctx context.Context, b *board.Board, conn *clientC
 			conn.Kick(board.KickSlow)
 		}
 	}
+}
+
+// sendError writes a ServerError directly (before closing the socket).
+func (c *clientConn) sendError(code pb.ErrorCode, msg string) {
+	data, err := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Error{Error: &pb.ServerError{Code: code, Message: msg}}})
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.writeTimeout)
+	defer cancel()
+	_ = c.ws.Write(ctx, websocket.MessageBinary, data)
 }

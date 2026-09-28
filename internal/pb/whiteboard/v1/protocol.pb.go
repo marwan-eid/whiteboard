@@ -21,6 +21,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Role int32
+
+const (
+	Role_ROLE_UNSPECIFIED Role = 0
+	Role_ROLE_VIEWER      Role = 1
+	Role_ROLE_EDITOR      Role = 2
+	Role_ROLE_OWNER       Role = 3
+)
+
+// Enum value maps for Role.
+var (
+	Role_name = map[int32]string{
+		0: "ROLE_UNSPECIFIED",
+		1: "ROLE_VIEWER",
+		2: "ROLE_EDITOR",
+		3: "ROLE_OWNER",
+	}
+	Role_value = map[string]int32{
+		"ROLE_UNSPECIFIED": 0,
+		"ROLE_VIEWER":      1,
+		"ROLE_EDITOR":      2,
+		"ROLE_OWNER":       3,
+	}
+)
+
+func (x Role) Enum() *Role {
+	p := new(Role)
+	*p = x
+	return p
+}
+
+func (x Role) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Role) Descriptor() protoreflect.EnumDescriptor {
+	return file_whiteboard_v1_protocol_proto_enumTypes[0].Descriptor()
+}
+
+func (Role) Type() protoreflect.EnumType {
+	return &file_whiteboard_v1_protocol_proto_enumTypes[0]
+}
+
+func (x Role) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Role.Descriptor instead.
+func (Role) EnumDescriptor() ([]byte, []int) {
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{0}
+}
+
 type ErrorCode int32
 
 const (
@@ -29,6 +81,8 @@ const (
 	ErrorCode_ERROR_CODE_UNSUPPORTED_VERSION ErrorCode = 2
 	// Another live connection on this board uses the same client_id.
 	ErrorCode_ERROR_CODE_CLIENT_ID_IN_USE ErrorCode = 3
+	// No access to this board (private, or the share link was revoked).
+	ErrorCode_ERROR_CODE_FORBIDDEN ErrorCode = 4
 )
 
 // Enum value maps for ErrorCode.
@@ -38,12 +92,14 @@ var (
 		1: "ERROR_CODE_BAD_REQUEST",
 		2: "ERROR_CODE_UNSUPPORTED_VERSION",
 		3: "ERROR_CODE_CLIENT_ID_IN_USE",
+		4: "ERROR_CODE_FORBIDDEN",
 	}
 	ErrorCode_value = map[string]int32{
 		"ERROR_CODE_UNSPECIFIED":         0,
 		"ERROR_CODE_BAD_REQUEST":         1,
 		"ERROR_CODE_UNSUPPORTED_VERSION": 2,
 		"ERROR_CODE_CLIENT_ID_IN_USE":    3,
+		"ERROR_CODE_FORBIDDEN":           4,
 	}
 )
 
@@ -58,11 +114,11 @@ func (x ErrorCode) String() string {
 }
 
 func (ErrorCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_whiteboard_v1_protocol_proto_enumTypes[0].Descriptor()
+	return file_whiteboard_v1_protocol_proto_enumTypes[1].Descriptor()
 }
 
 func (ErrorCode) Type() protoreflect.EnumType {
-	return &file_whiteboard_v1_protocol_proto_enumTypes[0]
+	return &file_whiteboard_v1_protocol_proto_enumTypes[1]
 }
 
 func (x ErrorCode) Number() protoreflect.EnumNumber {
@@ -71,7 +127,7 @@ func (x ErrorCode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ErrorCode.Descriptor instead.
 func (ErrorCode) EnumDescriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{0}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{1}
 }
 
 type ShapeType int32
@@ -119,11 +175,11 @@ func (x ShapeType) String() string {
 }
 
 func (ShapeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_whiteboard_v1_protocol_proto_enumTypes[1].Descriptor()
+	return file_whiteboard_v1_protocol_proto_enumTypes[2].Descriptor()
 }
 
 func (ShapeType) Type() protoreflect.EnumType {
-	return &file_whiteboard_v1_protocol_proto_enumTypes[1]
+	return &file_whiteboard_v1_protocol_proto_enumTypes[2]
 }
 
 func (x ShapeType) Number() protoreflect.EnumNumber {
@@ -132,7 +188,7 @@ func (x ShapeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShapeType.Descriptor instead.
 func (ShapeType) EnumDescriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{1}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{2}
 }
 
 type ClientMessage struct {
@@ -436,7 +492,11 @@ type Hello struct {
 	// have ids prefixed with its base-36 form (see ObjectIdPrefix).
 	ClientId uint64 `protobuf:"varint,3,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	// The region to receive; unset means the whole board.
-	Viewport      *Viewport `protobuf:"bytes,4,opt,name=viewport,proto3" json:"viewport,omitempty"`
+	Viewport *Viewport `protobuf:"bytes,4,opt,name=viewport,proto3" json:"viewport,omitempty"`
+	// Signed guest identity from POST /api/guest (optional for public boards).
+	GuestToken string `protobuf:"bytes,5,opt,name=guest_token,json=guestToken,proto3" json:"guest_token,omitempty"`
+	// A share link's token, for private boards.
+	ShareToken    string `protobuf:"bytes,6,opt,name=share_token,json=shareToken,proto3" json:"share_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -499,6 +559,20 @@ func (x *Hello) GetViewport() *Viewport {
 	return nil
 }
 
+func (x *Hello) GetGuestToken() string {
+	if x != nil {
+		return x.GuestToken
+	}
+	return ""
+}
+
+func (x *Hello) GetShareToken() string {
+	if x != nil {
+		return x.ShareToken
+	}
+	return ""
+}
+
 type Welcome struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ProtocolVersion uint32                 `protobuf:"varint,1,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
@@ -512,7 +586,9 @@ type Welcome struct {
 	// reconnecting client knows which pending batches to drop and which to resend.
 	LastClientSeq uint64 `protobuf:"varint,6,opt,name=last_client_seq,json=lastClientSeq,proto3" json:"last_client_seq,omitempty"`
 	// Clients on the board, including this one.
-	Online        uint32 `protobuf:"varint,7,opt,name=online,proto3" json:"online,omitempty"`
+	Online uint32 `protobuf:"varint,7,opt,name=online,proto3" json:"online,omitempty"`
+	// What this client may do; viewers cannot edit or restore.
+	Role          Role `protobuf:"varint,8,opt,name=role,proto3,enum=whiteboard.v1.Role" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -594,6 +670,13 @@ func (x *Welcome) GetOnline() uint32 {
 		return x.Online
 	}
 	return 0
+}
+
+func (x *Welcome) GetRole() Role {
+	if x != nil {
+		return x.Role
+	}
+	return Role_ROLE_UNSPECIFIED
 }
 
 // Clock-offset and RTT probe. The server echoes t0 and adds its own clock.
@@ -1879,12 +1962,16 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x05error\x18\x03 \x01(\v2\x1a.whiteboard.v1.ServerErrorH\x00R\x05error\x12,\n" +
 	"\x05frame\x18\x04 \x01(\v2\x14.whiteboard.v1.FrameH\x00R\x05frame\x122\n" +
 	"\ahistory\x18\x05 \x01(\v2\x16.whiteboard.v1.HistoryH\x00R\ahistoryB\x05\n" +
-	"\x03msg\"\x9f\x01\n" +
+	"\x03msg\"\xe1\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x19\n" +
 	"\bboard_id\x18\x02 \x01(\tR\aboardId\x12\x1b\n" +
 	"\tclient_id\x18\x03 \x01(\x04R\bclientId\x123\n" +
-	"\bviewport\x18\x04 \x01(\v2\x17.whiteboard.v1.ViewportR\bviewport\"\xfb\x01\n" +
+	"\bviewport\x18\x04 \x01(\v2\x17.whiteboard.v1.ViewportR\bviewport\x12\x1f\n" +
+	"\vguest_token\x18\x05 \x01(\tR\n" +
+	"guestToken\x12\x1f\n" +
+	"\vshare_token\x18\x06 \x01(\tR\n" +
+	"shareToken\"\xa4\x02\n" +
 	"\aWelcome\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12$\n" +
@@ -1892,7 +1979,8 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x03seq\x18\x04 \x01(\x04R\x03seq\x124\n" +
 	"\aobjects\x18\x05 \x03(\v2\x1a.whiteboard.v1.ObjectStateR\aobjects\x12&\n" +
 	"\x0flast_client_seq\x18\x06 \x01(\x04R\rlastClientSeq\x12\x16\n" +
-	"\x06online\x18\a \x01(\rR\x06online\"\x1a\n" +
+	"\x06online\x18\a \x01(\rR\x06online\x12'\n" +
+	"\x04role\x18\b \x01(\x0e2\x13.whiteboard.v1.RoleR\x04role\"\x1a\n" +
 	"\bTimePing\x12\x0e\n" +
 	"\x02t0\x18\x01 \x01(\x01R\x02t0\"@\n" +
 	"\bTimePong\x12\x0e\n" +
@@ -2001,12 +2089,19 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\awall_ms\x18\x02 \x01(\x03R\x06wallMs\x124\n" +
 	"\aobjects\x18\x03 \x03(\v2\x1a.whiteboard.v1.ObjectStateR\aobjects\"\"\n" +
 	"\x0eRestoreRequest\x12\x10\n" +
-	"\x03seq\x18\x01 \x01(\x04R\x03seq*\x88\x01\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq*N\n" +
+	"\x04Role\x12\x14\n" +
+	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vROLE_VIEWER\x10\x01\x12\x0f\n" +
+	"\vROLE_EDITOR\x10\x02\x12\x0e\n" +
+	"\n" +
+	"ROLE_OWNER\x10\x03*\xa2\x01\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ERROR_CODE_BAD_REQUEST\x10\x01\x12\"\n" +
 	"\x1eERROR_CODE_UNSUPPORTED_VERSION\x10\x02\x12\x1f\n" +
-	"\x1bERROR_CODE_CLIENT_ID_IN_USE\x10\x03*\xaf\x01\n" +
+	"\x1bERROR_CODE_CLIENT_ID_IN_USE\x10\x03\x12\x18\n" +
+	"\x14ERROR_CODE_FORBIDDEN\x10\x04*\xaf\x01\n" +
 	"\tShapeType\x12\x1a\n" +
 	"\x16SHAPE_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fSHAPE_TYPE_RECT\x10\x01\x12\x16\n" +
@@ -2029,73 +2124,75 @@ func file_whiteboard_v1_protocol_proto_rawDescGZIP() []byte {
 	return file_whiteboard_v1_protocol_proto_rawDescData
 }
 
-var file_whiteboard_v1_protocol_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_whiteboard_v1_protocol_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_whiteboard_v1_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_whiteboard_v1_protocol_proto_goTypes = []any{
-	(ErrorCode)(0),         // 0: whiteboard.v1.ErrorCode
-	(ShapeType)(0),         // 1: whiteboard.v1.ShapeType
-	(*ClientMessage)(nil),  // 2: whiteboard.v1.ClientMessage
-	(*ServerMessage)(nil),  // 3: whiteboard.v1.ServerMessage
-	(*Hello)(nil),          // 4: whiteboard.v1.Hello
-	(*Welcome)(nil),        // 5: whiteboard.v1.Welcome
-	(*TimePing)(nil),       // 6: whiteboard.v1.TimePing
-	(*TimePong)(nil),       // 7: whiteboard.v1.TimePong
-	(*ServerError)(nil),    // 8: whiteboard.v1.ServerError
-	(*Stamp)(nil),          // 9: whiteboard.v1.Stamp
-	(*ObjectProps)(nil),    // 10: whiteboard.v1.ObjectProps
-	(*Binding)(nil),        // 11: whiteboard.v1.Binding
-	(*Op)(nil),             // 12: whiteboard.v1.Op
-	(*OpBatch)(nil),        // 13: whiteboard.v1.OpBatch
-	(*SequencedBatch)(nil), // 14: whiteboard.v1.SequencedBatch
-	(*Ack)(nil),            // 15: whiteboard.v1.Ack
-	(*Frame)(nil),          // 16: whiteboard.v1.Frame
-	(*Viewport)(nil),       // 17: whiteboard.v1.Viewport
-	(*Cursor)(nil),         // 18: whiteboard.v1.Cursor
-	(*CursorUpdate)(nil),   // 19: whiteboard.v1.CursorUpdate
-	(*ObjectState)(nil),    // 20: whiteboard.v1.ObjectState
-	(*FieldStamps)(nil),    // 21: whiteboard.v1.FieldStamps
-	(*HistoryRequest)(nil), // 22: whiteboard.v1.HistoryRequest
-	(*History)(nil),        // 23: whiteboard.v1.History
-	(*RestoreRequest)(nil), // 24: whiteboard.v1.RestoreRequest
+	(Role)(0),              // 0: whiteboard.v1.Role
+	(ErrorCode)(0),         // 1: whiteboard.v1.ErrorCode
+	(ShapeType)(0),         // 2: whiteboard.v1.ShapeType
+	(*ClientMessage)(nil),  // 3: whiteboard.v1.ClientMessage
+	(*ServerMessage)(nil),  // 4: whiteboard.v1.ServerMessage
+	(*Hello)(nil),          // 5: whiteboard.v1.Hello
+	(*Welcome)(nil),        // 6: whiteboard.v1.Welcome
+	(*TimePing)(nil),       // 7: whiteboard.v1.TimePing
+	(*TimePong)(nil),       // 8: whiteboard.v1.TimePong
+	(*ServerError)(nil),    // 9: whiteboard.v1.ServerError
+	(*Stamp)(nil),          // 10: whiteboard.v1.Stamp
+	(*ObjectProps)(nil),    // 11: whiteboard.v1.ObjectProps
+	(*Binding)(nil),        // 12: whiteboard.v1.Binding
+	(*Op)(nil),             // 13: whiteboard.v1.Op
+	(*OpBatch)(nil),        // 14: whiteboard.v1.OpBatch
+	(*SequencedBatch)(nil), // 15: whiteboard.v1.SequencedBatch
+	(*Ack)(nil),            // 16: whiteboard.v1.Ack
+	(*Frame)(nil),          // 17: whiteboard.v1.Frame
+	(*Viewport)(nil),       // 18: whiteboard.v1.Viewport
+	(*Cursor)(nil),         // 19: whiteboard.v1.Cursor
+	(*CursorUpdate)(nil),   // 20: whiteboard.v1.CursorUpdate
+	(*ObjectState)(nil),    // 21: whiteboard.v1.ObjectState
+	(*FieldStamps)(nil),    // 22: whiteboard.v1.FieldStamps
+	(*HistoryRequest)(nil), // 23: whiteboard.v1.HistoryRequest
+	(*History)(nil),        // 24: whiteboard.v1.History
+	(*RestoreRequest)(nil), // 25: whiteboard.v1.RestoreRequest
 }
 var file_whiteboard_v1_protocol_proto_depIdxs = []int32{
-	4,  // 0: whiteboard.v1.ClientMessage.hello:type_name -> whiteboard.v1.Hello
-	6,  // 1: whiteboard.v1.ClientMessage.time_ping:type_name -> whiteboard.v1.TimePing
-	13, // 2: whiteboard.v1.ClientMessage.op_batch:type_name -> whiteboard.v1.OpBatch
-	18, // 3: whiteboard.v1.ClientMessage.cursor:type_name -> whiteboard.v1.Cursor
-	17, // 4: whiteboard.v1.ClientMessage.viewport:type_name -> whiteboard.v1.Viewport
-	22, // 5: whiteboard.v1.ClientMessage.history:type_name -> whiteboard.v1.HistoryRequest
-	24, // 6: whiteboard.v1.ClientMessage.restore:type_name -> whiteboard.v1.RestoreRequest
-	5,  // 7: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
-	7,  // 8: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
-	8,  // 9: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
-	16, // 10: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
-	23, // 11: whiteboard.v1.ServerMessage.history:type_name -> whiteboard.v1.History
-	17, // 12: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
-	20, // 13: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
-	0,  // 14: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
-	1,  // 15: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
-	11, // 16: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
-	11, // 17: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
-	10, // 18: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
-	9,  // 19: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
-	12, // 20: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
-	9,  // 21: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
-	12, // 22: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
-	9,  // 23: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
-	14, // 24: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
-	15, // 25: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
-	19, // 26: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
-	20, // 27: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
-	10, // 28: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
-	21, // 29: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
-	9,  // 30: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
-	20, // 31: whiteboard.v1.History.objects:type_name -> whiteboard.v1.ObjectState
-	32, // [32:32] is the sub-list for method output_type
-	32, // [32:32] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	5,  // 0: whiteboard.v1.ClientMessage.hello:type_name -> whiteboard.v1.Hello
+	7,  // 1: whiteboard.v1.ClientMessage.time_ping:type_name -> whiteboard.v1.TimePing
+	14, // 2: whiteboard.v1.ClientMessage.op_batch:type_name -> whiteboard.v1.OpBatch
+	19, // 3: whiteboard.v1.ClientMessage.cursor:type_name -> whiteboard.v1.Cursor
+	18, // 4: whiteboard.v1.ClientMessage.viewport:type_name -> whiteboard.v1.Viewport
+	23, // 5: whiteboard.v1.ClientMessage.history:type_name -> whiteboard.v1.HistoryRequest
+	25, // 6: whiteboard.v1.ClientMessage.restore:type_name -> whiteboard.v1.RestoreRequest
+	6,  // 7: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
+	8,  // 8: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
+	9,  // 9: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
+	17, // 10: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
+	24, // 11: whiteboard.v1.ServerMessage.history:type_name -> whiteboard.v1.History
+	18, // 12: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
+	21, // 13: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
+	0,  // 14: whiteboard.v1.Welcome.role:type_name -> whiteboard.v1.Role
+	1,  // 15: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
+	2,  // 16: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
+	12, // 17: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
+	12, // 18: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
+	11, // 19: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
+	10, // 20: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
+	13, // 21: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
+	10, // 22: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
+	13, // 23: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
+	10, // 24: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
+	15, // 25: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
+	16, // 26: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
+	20, // 27: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
+	21, // 28: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
+	11, // 29: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
+	22, // 30: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
+	10, // 31: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
+	21, // 32: whiteboard.v1.History.objects:type_name -> whiteboard.v1.ObjectState
+	33, // [33:33] is the sub-list for method output_type
+	33, // [33:33] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_whiteboard_v1_protocol_proto_init() }
@@ -2126,7 +2223,7 @@ func file_whiteboard_v1_protocol_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_whiteboard_v1_protocol_proto_rawDesc), len(file_whiteboard_v1_protocol_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
