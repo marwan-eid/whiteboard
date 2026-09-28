@@ -296,7 +296,9 @@ func TestShutdownClosesWithGoingAway(t *testing.T) {
 }
 
 func TestSlowConsumerIsKicked(t *testing.T) {
-	h := newHarness(t, Config{SendQueue: 1})
+	// The flood must not be slowed by the byte rate limit, or the slow client's
+	// socket fills too gradually for this test's timing.
+	h := newHarness(t, Config{SendQueue: 1, BytesPerSec: 1 << 30})
 	slow := h.dial(t)
 	join(t, slow, helloAs(protocol.Version, "demo", 20))
 	fast := h.dial(t)
