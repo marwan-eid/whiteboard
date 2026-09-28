@@ -238,11 +238,14 @@ sequenceDiagram
 - **Bounded queue:** the offline queue is capped at 10k ops or 5 MB. Beyond that, the client shows a warning.
 
 ### 3.5 History replay and point-in-time restore
-- **State at `seq = s`:** load the nearest snapshot at or before `s`, then replay segments and ops up to `s`.
-  - The actor for live editing is not involved; a separate history worker does this.
-  - Reconstructed states are cached as keyframes, every 1,000 ops, in an LRU.
-- **Replay slider:** sends `HistoryAt{seq}`, debounced. The response is filtered to the viewport. A play button streams ops at 10× to 100× speed.
-- **Restore to `s`:** the server diffs the current state against the state at `s` and appends the difference as a normal `OpBatch`: property sets, including `deleted = false` for objects deleted since `s` and `deleted = true` for objects created since. History stays append-only, and a restore can be undone.
+- **Compaction:** after each snapshot, log entries up to it move into `op_segments`: zstd-compressed runs of up to 10,000 entries. Each segment is written, and its rows deleted, in one transaction, so every seq is stored exactly once. Loading a board never reads segments; history does. Measured: 1M edits take 31 MB with full history, against 172 MB as one row per edit ([results](../benchmarks/results/2026-09-28-storage.md)).
+- **State at `seq = s`:** start from the nearest snapshot or cached keyframe at or before `s`, then replay the log (segments and live rows) up to `s`.
+  - This runs on the requesting connection's history goroutine, never the board actor, so scrubbing does not delay live editing.
+  - A state 1,000 or more batches from its base is cached as a keyframe (LRU of 8).
+  - History only shows committed batches.
+- **Replay slider:** the client sends `HistoryRequest{seq}`, debounced, and the gateway keeps only the newest pending request per connection. `History` holds the objects in the client's viewport, and the canvas shows them read-only while live edits keep syncing underneath. (A play button is later scope.)
+- **Restore to `s`:** the board actor diffs the present against the state at `s` and appends the difference as one batch from the server (client id 0), which every client receives. History stays append-only, and a restore can be undone by restoring the version before it.
+- **Unset fields:** a register cannot be unset. Text written since `s` is cleared to `""`; other fields first set after `s` keep their values (the UI sets them at create).
 
 ### 3.6 Placement and failover
 ```mermaid
