@@ -704,8 +704,22 @@ func (b *Board) maybeSnapshot() {
 		defer close(done)
 		if err := b.writeSnapshot(snap); err != nil {
 			b.log.Warn("snapshot failed", "seq", snap.Seq, "err", err)
+			return
 		}
+		b.compact(snap.Seq)
 	}()
+}
+
+// compact packs log entries up to a snapshot into compressed segments; loading
+// never needs them again, only history does.
+func (b *Board) compact(upTo uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.cfg.IOTimeout)
+	defer cancel()
+	if n, err := b.cfg.Store.Compact(ctx, b.id, upTo); err != nil {
+		b.log.Warn("compaction failed", "up_to", upTo, "err", err)
+	} else if n > 0 {
+		b.log.Debug("compacted log", "entries", n, "up_to", upTo)
+	}
 }
 
 func (b *Board) writeSnapshot(snap *pb.BoardSnapshot) error {

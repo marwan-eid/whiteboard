@@ -190,6 +190,128 @@ func (x *StoredBatch) GetOps() []*Op {
 	return nil
 }
 
+// A run of log entries, stored zstd-compressed in op_segments once they are
+// older than a snapshot (compaction; docs/decisions/0004-storage.md).
+type LogSegment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*SegmentEntry        `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogSegment) Reset() {
+	*x = LogSegment{}
+	mi := &file_whiteboard_v1_storage_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogSegment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogSegment) ProtoMessage() {}
+
+func (x *LogSegment) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_storage_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogSegment.ProtoReflect.Descriptor instead.
+func (*LogSegment) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_storage_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LogSegment) GetEntries() []*SegmentEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+type SegmentEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	ClientId      uint64                 `protobuf:"varint,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	ClientSeq     uint64                 `protobuf:"varint,3,opt,name=client_seq,json=clientSeq,proto3" json:"client_seq,omitempty"`
+	Stamp         *Stamp                 `protobuf:"bytes,4,opt,name=stamp,proto3" json:"stamp,omitempty"`
+	Ops           []*Op                  `protobuf:"bytes,5,rep,name=ops,proto3" json:"ops,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SegmentEntry) Reset() {
+	*x = SegmentEntry{}
+	mi := &file_whiteboard_v1_storage_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SegmentEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SegmentEntry) ProtoMessage() {}
+
+func (x *SegmentEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_storage_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SegmentEntry.ProtoReflect.Descriptor instead.
+func (*SegmentEntry) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_storage_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SegmentEntry) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *SegmentEntry) GetClientId() uint64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *SegmentEntry) GetClientSeq() uint64 {
+	if x != nil {
+		return x.ClientSeq
+	}
+	return 0
+}
+
+func (x *SegmentEntry) GetStamp() *Stamp {
+	if x != nil {
+		return x.Stamp
+	}
+	return nil
+}
+
+func (x *SegmentEntry) GetOps() []*Op {
+	if x != nil {
+		return x.Ops
+	}
+	return nil
+}
+
 var File_whiteboard_v1_storage_proto protoreflect.FileDescriptor
 
 const file_whiteboard_v1_storage_proto_rawDesc = "" +
@@ -204,7 +326,17 @@ const file_whiteboard_v1_storage_proto_rawDesc = "" +
 	"\x0flast_client_seq\x18\x02 \x01(\x04R\rlastClientSeq\"^\n" +
 	"\vStoredBatch\x12*\n" +
 	"\x05stamp\x18\x01 \x01(\v2\x14.whiteboard.v1.StampR\x05stamp\x12#\n" +
-	"\x03ops\x18\x02 \x03(\v2\x11.whiteboard.v1.OpR\x03opsB\xa9\x01\n" +
+	"\x03ops\x18\x02 \x03(\v2\x11.whiteboard.v1.OpR\x03ops\"C\n" +
+	"\n" +
+	"LogSegment\x125\n" +
+	"\aentries\x18\x01 \x03(\v2\x1b.whiteboard.v1.SegmentEntryR\aentries\"\xad\x01\n" +
+	"\fSegmentEntry\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\x04R\bclientId\x12\x1d\n" +
+	"\n" +
+	"client_seq\x18\x03 \x01(\x04R\tclientSeq\x12*\n" +
+	"\x05stamp\x18\x04 \x01(\v2\x14.whiteboard.v1.StampR\x05stamp\x12#\n" +
+	"\x03ops\x18\x05 \x03(\v2\x11.whiteboard.v1.OpR\x03opsB\xa9\x01\n" +
 	"\x11com.whiteboard.v1B\fStorageProtoP\x01Z1whiteboard/internal/pb/whiteboard/v1;whiteboardv1\xa2\x02\x03WXX\xaa\x02\rWhiteboard.V1\xca\x02\rWhiteboard\\V1\xe2\x02\x19Whiteboard\\V1\\GPBMetadata\xea\x02\x0eWhiteboard::V1b\x06proto3"
 
 var (
@@ -219,25 +351,30 @@ func file_whiteboard_v1_storage_proto_rawDescGZIP() []byte {
 	return file_whiteboard_v1_storage_proto_rawDescData
 }
 
-var file_whiteboard_v1_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_whiteboard_v1_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_whiteboard_v1_storage_proto_goTypes = []any{
 	(*BoardSnapshot)(nil),  // 0: whiteboard.v1.BoardSnapshot
 	(*ClientProgress)(nil), // 1: whiteboard.v1.ClientProgress
 	(*StoredBatch)(nil),    // 2: whiteboard.v1.StoredBatch
-	(*ObjectState)(nil),    // 3: whiteboard.v1.ObjectState
-	(*Stamp)(nil),          // 4: whiteboard.v1.Stamp
-	(*Op)(nil),             // 5: whiteboard.v1.Op
+	(*LogSegment)(nil),     // 3: whiteboard.v1.LogSegment
+	(*SegmentEntry)(nil),   // 4: whiteboard.v1.SegmentEntry
+	(*ObjectState)(nil),    // 5: whiteboard.v1.ObjectState
+	(*Stamp)(nil),          // 6: whiteboard.v1.Stamp
+	(*Op)(nil),             // 7: whiteboard.v1.Op
 }
 var file_whiteboard_v1_storage_proto_depIdxs = []int32{
-	3, // 0: whiteboard.v1.BoardSnapshot.objects:type_name -> whiteboard.v1.ObjectState
+	5, // 0: whiteboard.v1.BoardSnapshot.objects:type_name -> whiteboard.v1.ObjectState
 	1, // 1: whiteboard.v1.BoardSnapshot.clients:type_name -> whiteboard.v1.ClientProgress
-	4, // 2: whiteboard.v1.StoredBatch.stamp:type_name -> whiteboard.v1.Stamp
-	5, // 3: whiteboard.v1.StoredBatch.ops:type_name -> whiteboard.v1.Op
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 2: whiteboard.v1.StoredBatch.stamp:type_name -> whiteboard.v1.Stamp
+	7, // 3: whiteboard.v1.StoredBatch.ops:type_name -> whiteboard.v1.Op
+	4, // 4: whiteboard.v1.LogSegment.entries:type_name -> whiteboard.v1.SegmentEntry
+	6, // 5: whiteboard.v1.SegmentEntry.stamp:type_name -> whiteboard.v1.Stamp
+	7, // 6: whiteboard.v1.SegmentEntry.ops:type_name -> whiteboard.v1.Op
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_whiteboard_v1_storage_proto_init() }
@@ -252,7 +389,7 @@ func file_whiteboard_v1_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_whiteboard_v1_storage_proto_rawDesc), len(file_whiteboard_v1_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

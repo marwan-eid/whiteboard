@@ -26,3 +26,17 @@ message StoredBatch {
   Stamp stamp = 1;
   repeated Op ops = 2;
 }
+
+// A run of log entries, stored zstd-compressed in op_segments once they are
+// older than a snapshot (compaction; docs/decisions/0004-storage.md).
+message LogSegment {
+  repeated SegmentEntry entries = 1;
+}
+
+message SegmentEntry {
+  uint64 seq = 1;
+  uint64 client_id = 2;
+  uint64 client_seq = 3;
+  Stamp stamp = 4;
+  repeated Op ops = 5;
+}

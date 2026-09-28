@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file whiteboard/v1/storage.proto.
  */
 export const file_whiteboard_v1_storage: GenFile = /*@__PURE__*/
-  fileDesc("Cht3aGl0ZWJvYXJkL3YxL3N0b3JhZ2UucHJvdG8SDXdoaXRlYm9hcmQudjEieQoNQm9hcmRTbmFwc2hvdBILCgNzZXEYASABKAQSKwoHb2JqZWN0cxgCIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSLgoHY2xpZW50cxgDIAMoCzIdLndoaXRlYm9hcmQudjEuQ2xpZW50UHJvZ3Jlc3MiPAoOQ2xpZW50UHJvZ3Jlc3MSEQoJY2xpZW50X2lkGAEgASgEEhcKD2xhc3RfY2xpZW50X3NlcRgCIAEoBCJSCgtTdG9yZWRCYXRjaBIjCgVzdGFtcBgBIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAIgAygLMhEud2hpdGVib2FyZC52MS5PcEKpAQoRY29tLndoaXRlYm9hcmQudjFCDFN0b3JhZ2VQcm90b1ABWjF3aGl0ZWJvYXJkL2ludGVybmFsL3BiL3doaXRlYm9hcmQvdjE7d2hpdGVib2FyZHYxogIDV1hYqgINV2hpdGVib2FyZC5WMcoCDVdoaXRlYm9hcmRcVjHiAhlXaGl0ZWJvYXJkXFYxXEdQQk1ldGFkYXRh6gIOV2hpdGVib2FyZDo6VjFiBnByb3RvMw", [file_whiteboard_v1_protocol]);
+  fileDesc("Cht3aGl0ZWJvYXJkL3YxL3N0b3JhZ2UucHJvdG8SDXdoaXRlYm9hcmQudjEieQoNQm9hcmRTbmFwc2hvdBILCgNzZXEYASABKAQSKwoHb2JqZWN0cxgCIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSLgoHY2xpZW50cxgDIAMoCzIdLndoaXRlYm9hcmQudjEuQ2xpZW50UHJvZ3Jlc3MiPAoOQ2xpZW50UHJvZ3Jlc3MSEQoJY2xpZW50X2lkGAEgASgEEhcKD2xhc3RfY2xpZW50X3NlcRgCIAEoBCJSCgtTdG9yZWRCYXRjaBIjCgVzdGFtcBgBIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAIgAygLMhEud2hpdGVib2FyZC52MS5PcCI6CgpMb2dTZWdtZW50EiwKB2VudHJpZXMYASADKAsyGy53aGl0ZWJvYXJkLnYxLlNlZ21lbnRFbnRyeSKHAQoMU2VnbWVudEVudHJ5EgsKA3NlcRgBIAEoBBIRCgljbGllbnRfaWQYAiABKAQSEgoKY2xpZW50X3NlcRgDIAEoBBIjCgVzdGFtcBgEIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAUgAygLMhEud2hpdGVib2FyZC52MS5PcEKpAQoRY29tLndoaXRlYm9hcmQudjFCDFN0b3JhZ2VQcm90b1ABWjF3aGl0ZWJvYXJkL2ludGVybmFsL3BiL3doaXRlYm9hcmQvdjE7d2hpdGVib2FyZHYxogIDV1hYqgINV2hpdGVib2FyZC5WMcoCDVdoaXRlYm9hcmRcVjHiAhlXaGl0ZWJvYXJkXFYxXEdQQk1ldGFkYXRh6gIOV2hpdGVib2FyZDo6VjFiBnByb3RvMw", [file_whiteboard_v1_protocol]);
 
 /**
  * A full board as of seq, stored zstd-compressed in the snapshots table.
@@ -92,4 +92,61 @@ export type StoredBatch = Message<"whiteboard.v1.StoredBatch"> & {
  */
 export const StoredBatchSchema: GenMessage<StoredBatch> = /*@__PURE__*/
   messageDesc(file_whiteboard_v1_storage, 2);
+
+/**
+ * A run of log entries, stored zstd-compressed in op_segments once they are
+ * older than a snapshot (compaction; docs/decisions/0004-storage.md).
+ *
+ * @generated from message whiteboard.v1.LogSegment
+ */
+export type LogSegment = Message<"whiteboard.v1.LogSegment"> & {
+  /**
+   * @generated from field: repeated whiteboard.v1.SegmentEntry entries = 1;
+   */
+  entries: SegmentEntry[];
+};
+
+/**
+ * Describes the message whiteboard.v1.LogSegment.
+ * Use `create(LogSegmentSchema)` to create a new message.
+ */
+export const LogSegmentSchema: GenMessage<LogSegment> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_storage, 3);
+
+/**
+ * @generated from message whiteboard.v1.SegmentEntry
+ */
+export type SegmentEntry = Message<"whiteboard.v1.SegmentEntry"> & {
+  /**
+   * @generated from field: uint64 seq = 1;
+   */
+  seq: bigint;
+
+  /**
+   * @generated from field: uint64 client_id = 2;
+   */
+  clientId: bigint;
+
+  /**
+   * @generated from field: uint64 client_seq = 3;
+   */
+  clientSeq: bigint;
+
+  /**
+   * @generated from field: whiteboard.v1.Stamp stamp = 4;
+   */
+  stamp?: Stamp | undefined;
+
+  /**
+   * @generated from field: repeated whiteboard.v1.Op ops = 5;
+   */
+  ops: Op[];
+};
+
+/**
+ * Describes the message whiteboard.v1.SegmentEntry.
+ * Use `create(SegmentEntrySchema)` to create a new message.
+ */
+export const SegmentEntrySchema: GenMessage<SegmentEntry> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_storage, 4);
 

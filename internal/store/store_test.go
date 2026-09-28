@@ -126,3 +126,57 @@ func TestStore(t *testing.T) {
 		}
 	})
 }
+
+func TestCompactionKeepsHistory(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if _, err := s.Load(ctx, "c"); err != nil {
+		t.Fatal(err)
+	}
+	var all []board.LogEntry
+	for i := uint64(1); i <= 25; i++ {
+		e := entry(i, 10, i, float64(i))
+		all = append(all, e)
+		if err := s.Append(ctx, "c", []board.LogEntry{e}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveSnapshot(ctx, "c", &pb.BoardSnapshot{Seq: 20}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.Compact(ctx, "c", 20)
+	if err != nil || n != 20 {
+		t.Fatalf("compacted %d, %v; want 20", n, err)
+	}
+	if n, _ := s.Compact(ctx, "c", 20); n != 0 {
+		t.Fatalf("second compaction moved %d", n)
+	}
+
+	// Any range reads the same, across segments and live rows.
+	for _, r := range [][2]uint64{{0, 25}, {5, 22}, {19, 21}, {20, 25}, {0, 3}} {
+		got, err := s.Range(ctx, "c", r[0], r[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := all[r[0]:r[1]]
+		if len(got) != len(want) {
+			t.Fatalf("range %v: %d entries, want %d", r, len(got), len(want))
+		}
+		for i := range got {
+			if got[i].Seq != want[i].Seq || got[i].ClientSeq != want[i].ClientSeq || !proto.Equal(got[i].Ops[0], want[i].Ops[0]) {
+				t.Fatalf("range %v entry %d = %+v", r, i, got[i])
+			}
+		}
+	}
+	// Loading still sees the snapshot plus the uncompacted tail.
+	l, err := s.Load(ctx, "c")
+	if err != nil || l.Snapshot.GetSeq() != 20 || len(l.Tail) != 5 {
+		t.Fatalf("load after compaction: snapshot %d, tail %d, %v", l.Snapshot.GetSeq(), len(l.Tail), err)
+	}
+	if snap, _ := s.SnapshotAtOrBefore(ctx, "c", 19); snap != nil {
+		t.Fatalf("snapshot at or before 19 = %v, want none", snap)
+	}
+	if snap, _ := s.SnapshotAtOrBefore(ctx, "c", 24); snap.GetSeq() != 20 {
+		t.Fatalf("snapshot at or before 24 = %d, want 20", snap.GetSeq())
+	}
+}

@@ -21,6 +21,15 @@ type Store interface {
 	// any seq already exists: another writer owns the board.
 	Append(ctx context.Context, boardID string, entries []LogEntry) error
 	SaveSnapshot(ctx context.Context, boardID string, snap *pb.BoardSnapshot) error
+
+	// Range returns the log entries with from < seq <= to, in seq order,
+	// wherever they are stored (compacted or not).
+	Range(ctx context.Context, boardID string, from, to uint64) ([]LogEntry, error)
+	// SnapshotAtOrBefore returns the latest snapshot with seq <= seq, or nil.
+	SnapshotAtOrBefore(ctx context.Context, boardID string, seq uint64) (*pb.BoardSnapshot, error)
+	// Compact moves log entries with seq <= upTo into compressed segments
+	// and reports how many it moved.
+	Compact(ctx context.Context, boardID string, upTo uint64) (int, error)
 }
 
 // ErrConflict means the log already has an entry at one of the seqs being
@@ -139,3 +148,30 @@ func (m *MemoryStore) Snapshots(boardID string) int {
 	defer m.mu.Unlock()
 	return len(m.snaps[boardID])
 }
+
+func (m *MemoryStore) Range(_ context.Context, boardID string, from, to uint64) ([]LogEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []LogEntry
+	for _, e := range m.logs[boardID] {
+		if e.Seq > from && e.Seq <= to {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func (m *MemoryStore) SnapshotAtOrBefore(_ context.Context, boardID string, seq uint64) (*pb.BoardSnapshot, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var best *pb.BoardSnapshot
+	for _, s := range m.snaps[boardID] {
+		if s.GetSeq() <= seq && (best == nil || s.GetSeq() > best.GetSeq()) {
+			best = s
+		}
+	}
+	return proto.CloneOf(best), nil
+}
+
+// Compact is a no-op in memory: there is no storage to save.
+func (m *MemoryStore) Compact(context.Context, string, uint64) (int, error) { return 0, nil }
