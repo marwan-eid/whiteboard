@@ -2,12 +2,13 @@ package ratelimit
 
 import (
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
 func TestKeyed(t *testing.T) {
 	k := NewKeyed(0, 2) // no refill
-	if !k.Allow("a") || !k.Allow("a") || k.Allow("a") {
+	if got := []bool{k.Allow("a"), k.Allow("a"), k.Allow("a")}; !slices.Equal(got, []bool{true, true, false}) {
 		t.Fatal("key a should get exactly its burst")
 	}
 	if !k.Allow("b") {
@@ -17,7 +18,7 @@ func TestKeyed(t *testing.T) {
 
 func TestCounter(t *testing.T) {
 	c := NewCounter(2)
-	if !c.Acquire("a") || !c.Acquire("a") || c.Acquire("a") {
+	if got := []bool{c.Acquire("a"), c.Acquire("a"), c.Acquire("a")}; !slices.Equal(got, []bool{true, true, false}) {
 		t.Fatal("want exactly 2 slots")
 	}
 	c.Release("a")

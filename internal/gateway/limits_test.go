@@ -30,7 +30,7 @@ func TestConnectionsPerIPAreCapped(t *testing.T) {
 	_ = resp.Body.Close()
 
 	// Closing one frees its slot.
-	a.Close(websocket.StatusNormalClosure, "")
+	_ = a.Close(websocket.StatusNormalClosure, "")
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		c, resp, err := websocket.Dial(ctx, h.url, nil)
