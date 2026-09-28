@@ -11,6 +11,7 @@ import (
 	"whiteboard/internal/access"
 	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/ratelimit"
 )
 
 // fakeBoards: board "b1" belongs to owner; no other board exists.
@@ -124,5 +125,34 @@ func TestBoardAPI(t *testing.T) {
 	}
 	if len(fb.revoked) != 1 || len(kicked) != 1 || kicked[0] != "b1/l1" {
 		t.Fatalf("revoked %v, kicked %v", fb.revoked, kicked)
+	}
+}
+
+func TestBoardCreationIsLimitedPerIP(t *testing.T) {
+	signer := access.NewSigner([]byte("test"))
+	h := NewRouter(Deps{
+		Gateway:      http.NotFoundHandler(),
+		Metrics:      metrics.New(),
+		Ready:        func(context.Context) error { return nil },
+		Signer:       signer,
+		Boards:       &fakeBoards{},
+		BoardCreates: ratelimit.NewKeyed(0, 2),
+	})
+	token, _ := signer.Issue()
+	create := func(ip string) int {
+		req := httptest.NewRequest("POST", "/api/boards", nil)
+		req.RemoteAddr = ip + ":1234"
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i, want := range []int{201, 201, 429} {
+		if got := create("1.1.1.1"); got != want {
+			t.Fatalf("create %d = %d, want %d", i, got, want)
+		}
+	}
+	if got := create("2.2.2.2"); got != 201 {
+		t.Fatalf("another address = %d", got)
 	}
 }

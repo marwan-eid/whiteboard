@@ -31,6 +31,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Signs guest tokens. Set your own for anything public: SECRET=... docker compose up
       SECRET: ${SECRET:-dev-only-secret-change-me}
+      # The node is reachable only through Caddy, which sets X-Forwarded-For.
+      TRUST_PROXY: "true"
+      # Open WebSockets per client IP; 0 turns the limit off (load tests from one machine).
+      MAX_CONNS_PER_IP: ${MAX_CONNS_PER_IP:-64}
     depends_on:
       postgres:
         condition: service_healthy

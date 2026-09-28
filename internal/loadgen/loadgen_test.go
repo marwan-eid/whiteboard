@@ -31,6 +31,7 @@ func TestEditorsMeasureSyncLatency(t *testing.T) {
 		BoardID:   "load",
 		Editors:   20,
 		Ramp:      200 * time.Millisecond,
+		Warmup:    300 * time.Millisecond,
 		Duration:  1500 * time.Millisecond,
 		OpsPerSec: 10,
 		CursorHz:  15,
@@ -38,7 +39,7 @@ func TestEditorsMeasureSyncLatency(t *testing.T) {
 		Seed:      1,
 	})
 	s := res.Summarize()
-	if s.Failed != 0 || s.Connected != 20 {
+	if s.Failed != 0 || s.Late != 0 || s.Connected != 20 {
 		t.Fatalf("connected=%d failed=%d errors=%v", s.Connected, s.Failed, res.Errors)
 	}
 	if s.OpsSent == 0 || s.Samples == 0 {

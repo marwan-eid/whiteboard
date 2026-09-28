@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -22,6 +23,13 @@ type Config struct {
 	// Secret signs guest tokens (SECRET). Every node must share it. If unset,
 	// the node makes a random one, and guest tokens stop working on restart.
 	Secret string
+	// MaxConnsPerIP caps open WebSockets per client IP (MAX_CONNS_PER_IP,
+	// default 64; 0 means no limit, for load tests from one machine).
+	MaxConnsPerIP int
+	// TrustProxy takes the client IP from the last X-Forwarded-For entry,
+	// appended by the reverse proxy (TRUST_PROXY=true). Set it only when the
+	// node is reachable solely through that proxy.
+	TrustProxy bool
 }
 
 // FromEnv loads the config from the process environment.
@@ -49,6 +57,21 @@ func Load(getenv func(string) string, hostname func() (string, error)) (Config, 
 			return Config{}, fmt.Errorf("NODE_ID unset and hostname unavailable: %w", err)
 		}
 		cfg.NodeID = h
+	}
+	cfg.MaxConnsPerIP = 64
+	if v := getenv("MAX_CONNS_PER_IP"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return Config{}, fmt.Errorf("invalid MAX_CONNS_PER_IP %q", v)
+		}
+		cfg.MaxConnsPerIP = n
+	}
+	if v := getenv("TRUST_PROXY"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid TRUST_PROXY %q", v)
+		}
+		cfg.TrustProxy = b
 	}
 	if lvl := getenv("LOG_LEVEL"); lvl != "" {
 		if err := cfg.LogLevel.UnmarshalText([]byte(strings.ToLower(lvl))); err != nil {

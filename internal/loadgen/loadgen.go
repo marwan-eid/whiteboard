@@ -70,7 +70,11 @@ type Result struct {
 	Config    Config
 	Connected int
 	Failed    int
-	Errors    map[string]int
+	// Late counts editors that connected only after the warmup, when latency
+	// was already being measured (for example, refused by a server limit and
+	// retried). A run with late editors did not have its full load.
+	Late   int
+	Errors map[string]int
 	// Latency holds sender-to-receiver sync latency in microseconds.
 	Latency *hdrhistogram.Histogram
 	OpsSent int64
@@ -82,6 +86,7 @@ type Summary struct {
 	Editors   int     `json:"editors"`
 	Connected int     `json:"connected"`
 	Failed    int     `json:"failed"`
+	Late      int     `json:"late"`
 	OpsSent   int64   `json:"ops_sent"`
 	Samples   int64   `json:"latency_samples"`
 	P50ms     float64 `json:"p50_ms"`
@@ -95,7 +100,7 @@ type Summary struct {
 func (r Result) Summarize() Summary {
 	ms := func(q float64) float64 { return float64(r.Latency.ValueAtQuantile(q)) / 1000 }
 	return Summary{
-		Editors: r.Config.Editors, Connected: r.Connected, Failed: r.Failed, OpsSent: r.OpsSent,
+		Editors: r.Config.Editors, Connected: r.Connected, Failed: r.Failed, Late: r.Late, OpsSent: r.OpsSent,
 		Samples: r.Latency.TotalCount(),
 		P50ms:   ms(50), P90ms: ms(90), P99ms: ms(99), P999ms: ms(99.9),
 		MaxMs:    float64(r.Latency.Max()) / 1000,
@@ -137,7 +142,7 @@ func Run(ctx context.Context, cfg Config) Result {
 					return
 				}
 			}
-			hist, err := runEditor(ctx, cfg, i, &sent, &opsSent, measureFrom, stopAt)
+			hist, late, err := runEditor(ctx, cfg, i, &sent, &opsSent, measureFrom, stopAt)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -146,6 +151,9 @@ func Run(ctx context.Context, cfg Config) Result {
 				return
 			}
 			res.Connected++
+			if late {
+				res.Late++
+			}
 			res.Latency.Merge(hist)
 		}()
 	}
@@ -155,7 +163,7 @@ func Run(ctx context.Context, cfg Config) Result {
 	return res
 }
 
-func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent *atomic.Int64, measureFrom, stopAt time.Time) (*hdrhistogram.Histogram, error) {
+func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent *atomic.Int64, measureFrom, stopAt time.Time) (hist *hdrhistogram.Histogram, late bool, err error) {
 	rng := rand.New(rand.NewPCG(cfg.Seed, uint64(i)))
 	cx, cy := cfg.Area/2, cfg.Area/2
 	if rng.Float64() >= cfg.Hotspot {
@@ -167,7 +175,7 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 	}
 
 	// Only this editor's read goroutine touches hist.
-	hist := newHistogram()
+	hist = newHistogram()
 	c := client.New(client.Config{
 		URL: cfg.URL, BoardID: cfg.BoardID, Reconnect: true, Viewport: view,
 		OnFrame: func(f *pb.Frame) {
@@ -184,11 +192,12 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 	})
 	defer c.Close()
 	dialCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	err := c.Connect(dialCtx)
+	err = c.Connect(dialCtx)
 	cancel()
 	if err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
+		return nil, false, fmt.Errorf("connect: %w", err)
 	}
+	late = time.Now().After(measureFrom)
 
 	// Each editor creates a few shapes near its view's center, then moves them.
 	own := make([]string, cfg.ObjectsPerEditor)
@@ -212,7 +221,7 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 	for {
 		now := time.Now()
 		if now.After(stopAt) || ctx.Err() != nil {
-			return hist, nil
+			return hist, late, nil
 		}
 		if cursorEvery > 0 && !now.Before(nextCursor) {
 			c.MoveCursor(cx+rng.NormFloat64()*cfg.ViewW/4, cy+rng.NormFloat64()*cfg.ViewH/4)

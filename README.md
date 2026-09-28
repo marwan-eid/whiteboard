@@ -49,7 +49,7 @@ npm run dev:web
 | Web lint / typecheck / unit tests | `npm run lint`, `npm run typecheck`, `npm test` |
 | Browser smoke test (stack must be running) | `npm -w web run e2e` |
 | Regenerate protocol code after editing `proto/` | `npm run gen` |
-| Simulated editors (reports sync latency) | `go run ./cmd/loadgen -editors 100 -duration 30s` |
+| Simulated editors (reports sync latency) | `go run ./cmd/loadgen -editors 100 -duration 30s`; above 64 editors from one machine, start the stack with `MAX_CONNS_PER_IP=0` |
 | Fill a board with objects | `go run ./cmd/seed -board big -objects 100000` |
 | Browser performance on a big board | `npx -w web playwright test -c perf.config.ts` |
 | Storage per edit (wipes the given database) | `go run ./cmd/storagebench -db <scratch postgres url> -edits 100000` |

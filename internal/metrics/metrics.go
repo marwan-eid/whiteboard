@@ -14,6 +14,10 @@ type Metrics struct {
 	// WSMessagesIn counts decoded client messages by type
 	// (hello, time_ping, op_batch, invalid).
 	WSMessagesIn *prometheus.CounterVec
+	// Throttled counts client messages delayed by a per-connection rate limit, by limit.
+	Throttled *prometheus.CounterVec
+	// LimitRejections counts requests refused by a per-IP limit, by limit.
+	LimitRejections *prometheus.CounterVec
 
 	BoardsActive    prometheus.Gauge
 	BatchesApplied  prometheus.Counter
@@ -51,6 +55,14 @@ func New() *Metrics {
 			Name: "ws_messages_in_total",
 			Help: "Client messages received, by message type.",
 		}, []string{"type"}),
+		Throttled: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ws_throttled_total",
+			Help: "Client messages delayed by a per-connection rate limit, by limit (batches, ops, bytes).",
+		}, []string{"limit"}),
+		LimitRejections: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "limit_rejections_total",
+			Help: "Requests refused by a per-IP limit, by limit (connections, board_creates).",
+		}, []string{"limit"}),
 		BoardsActive: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "boards_active",
 			Help: "Boards loaded on this node.",
@@ -120,7 +132,7 @@ func New() *Metrics {
 	reg.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		m.WSConnections, m.WSMessagesIn,
+		m.WSConnections, m.WSMessagesIn, m.Throttled, m.LimitRejections,
 		m.BoardsActive, m.BatchesApplied, m.BatchesRejected, m.StampsClamped,
 		m.ClientsKicked, m.TickDuration,
 		m.CommitDuration, m.BoardLoadDuration, m.SnapshotDuration,

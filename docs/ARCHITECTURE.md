@@ -278,7 +278,7 @@ sequenceDiagram
 - **Results:** tallies are hidden until the session ends or the owner reveals them.
 
 ### 3.9 Auth, permissions, abuse
-Built in W6 (`internal/access`), except the rate limits.
+Built in W6 (`internal/access`, `internal/ratelimit`).
 - **Guest identity:** on first visit the client calls `POST /api/guest` and keeps the token in localStorage. The token is `<guestId>.<HMAC-SHA256(guestId)>`, keyed by the `SECRET` setting, so the server stores nothing per guest. No signup. A forged or stale token just means anonymous.
 - **Visibility:**
   - Visiting an unknown board id creates a **public** board: anyone with the id can edit it (the demo board works this way).
@@ -292,10 +292,12 @@ Built in W6 (`internal/access`), except the rate limits.
   - The server stores only a SHA-256 hash of the token, and the owner sees the link once, when it is created.
   - Revoking a link (`DELETE /api/boards/{id}/links/{link}`) also disconnects everyone connected through it, at once: the board actor knows which link each connection came in on.
 - **HTTP API:** `POST /api/guest`; `GET|POST /api/boards` (my boards, new private board); `GET|POST /api/boards/{id}/links`; `DELETE /api/boards/{id}/links/{link}`. All but the first take `Authorization: Bearer <guest token>`.
-- **Rate limits (token buckets):**
-  - Per connection: ops/s, bytes/s, cursor Hz.
-  - Per IP: connections, board creations per hour.
-  - Per board: an object cap (200k) and a maximum payload size.
+- **Limits:**
+  - Per connection, token buckets with two seconds of burst: 240 batches/s, 2,000 ops/s, 1 MiB/s. A client over them is **slowed down, not disconnected**: the gateway stops reading its socket until tokens refill, so TCP pushes back on the sender. The defaults leave room for a fast pointer drag, which sends a batch per pointer event. Cursor updates over ~25 Hz are dropped (W3). Delays are counted in `ws_throttled_total`.
+  - Per message: 256 KiB, and 500 ops per batch.
+  - Per IP: 64 open WebSockets (`MAX_CONNS_PER_IP`; 0 turns it off for load tests from one machine), and 30 new private boards an hour with a burst of 10. Refusals return HTTP 429 and are counted in `limit_rejections_total`. Behind Caddy the client IP is the last `X-Forwarded-For` entry (`TRUST_PROXY=true`), which Caddy appends itself.
+  - Per board: 200k objects, deleted ones included (they are kept as tombstones). A batch that would create more is rejected; edits to existing objects still work.
+  - Not limited yet: public boards created by visiting new ids. Each costs one row until it has content.
 - **Demo board:** resets nightly from a seed snapshot. Vandalism can also be reverted with restore.
 
 ## 3.10 Browser client

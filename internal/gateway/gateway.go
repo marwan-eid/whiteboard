@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/proto"
 
 	"whiteboard/internal/access"
@@ -21,6 +22,7 @@ import (
 	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
 	"whiteboard/internal/protocol"
+	"whiteboard/internal/ratelimit"
 )
 
 type Config struct {
@@ -39,7 +41,16 @@ type Config struct {
 	Authorizer access.Authorizer
 	// Signer verifies guest tokens (default: tokens are ignored).
 	Signer *access.Signer
-	Now    func() time.Time
+	// ConnsPerIP caps open connections per client IP (default: no limit).
+	ConnsPerIP *ratelimit.Counter
+	// TrustProxy takes the client IP from X-Forwarded-For (see config.TrustProxy).
+	TrustProxy bool
+	// Per-connection token buckets, refilled per second, with two seconds of
+	// burst. A client over them is slowed down (its messages wait), not
+	// disconnected. The defaults leave room for a fast pointer drag, which
+	// sends a batch per pointer event.
+	BatchesPerSec, OpsPerSec, BytesPerSec float64
+	Now                                   func() time.Time
 }
 
 type Gateway struct {
@@ -73,6 +84,15 @@ func New(cfg Config, boards *board.Registry, log *slog.Logger, m *metrics.Metric
 	if cfg.MinCursorInterval == 0 {
 		cfg.MinCursorInterval = 40 * time.Millisecond
 	}
+	if cfg.BatchesPerSec == 0 {
+		cfg.BatchesPerSec = 240
+	}
+	if cfg.OpsPerSec == 0 {
+		cfg.OpsPerSec = 2000
+	}
+	if cfg.BytesPerSec == 0 {
+		cfg.BytesPerSec = 1 << 20
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -86,6 +106,15 @@ func (g *Gateway) Shutdown() {
 }
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if g.cfg.ConnsPerIP != nil {
+		ip := ratelimit.ClientIP(r, g.cfg.TrustProxy)
+		if !g.cfg.ConnsPerIP.Acquire(ip) {
+			g.metrics.LimitRejections.WithLabelValues("connections").Inc()
+			http.Error(w, "too many connections from this address", http.StatusTooManyRequests)
+			return
+		}
+		defer g.cfg.ConnsPerIP.Release(ip)
+	}
 	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		g.log.Debug("websocket accept failed", "err", err, "remote", r.RemoteAddr)
@@ -119,7 +148,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
-	msg, err := g.read(ctx, c, g.cfg.HelloTimeout)
+	msg, _, err := g.read(ctx, c, g.cfg.HelloTimeout)
 	if err != nil {
 		return err
 	}
@@ -176,10 +205,14 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 	defer close(history)
 	go g.historyLoop(ctx, b, conn, history)
 
+	lim := g.newLimits()
 	var lastCursor time.Time
 	for {
-		msg, err := g.read(ctx, c, 0)
+		msg, size, err := g.read(ctx, c, 0)
 		if err != nil {
+			return err
+		}
+		if err := g.throttle(ctx, lim.bytes, size, "bytes"); err != nil {
 			return err
 		}
 		switch m := msg.Msg.(type) {
@@ -204,6 +237,12 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 		case *pb.ClientMessage_OpBatch:
 			if !grant.CanEdit() {
 				return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "view-only access")
+			}
+			if err := g.throttle(ctx, lim.batches, 1, "batches"); err != nil {
+				return err
+			}
+			if err := g.throttle(ctx, lim.ops, len(m.OpBatch.GetOps()), "ops"); err != nil {
+				return err
 			}
 			if err := b.Submit(ctx, conn.id, m.OpBatch); err != nil {
 				return err
@@ -254,7 +293,7 @@ func (g *Gateway) writeLoop(ctx context.Context, c *websocket.Conn, send <-chan 
 }
 
 // read waits for one client message; timeout 0 means no extra deadline.
-func (g *Gateway) read(ctx context.Context, c *websocket.Conn, timeout time.Duration) (*pb.ClientMessage, error) {
+func (g *Gateway) read(ctx context.Context, c *websocket.Conn, timeout time.Duration) (*pb.ClientMessage, int, error) {
 	readCtx := ctx
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -263,15 +302,47 @@ func (g *Gateway) read(ctx context.Context, c *websocket.Conn, timeout time.Dura
 	}
 	typ, data, err := c.Read(readCtx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var msg pb.ClientMessage
 	if typ != websocket.MessageBinary || proto.Unmarshal(data, &msg) != nil || msg.Msg == nil {
 		g.metrics.WSMessagesIn.WithLabelValues("invalid").Inc()
-		return nil, g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "malformed message")
+		return nil, 0, g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "malformed message")
 	}
 	g.metrics.WSMessagesIn.WithLabelValues(messageType(&msg)).Inc()
-	return &msg, nil
+	return &msg, len(data), nil
+}
+
+type limits struct{ batches, ops, bytes *rate.Limiter }
+
+func (g *Gateway) newLimits() limits {
+	bucket := func(perSec float64, minBurst int) *rate.Limiter {
+		return rate.NewLimiter(rate.Limit(perSec), max(int(2*perSec), minBurst))
+	}
+	return limits{
+		batches: bucket(g.cfg.BatchesPerSec, 1),
+		ops:     bucket(g.cfg.OpsPerSec, protocol.MaxOpsPerBatch),
+		bytes:   bucket(g.cfg.BytesPerSec, int(g.cfg.MaxMessageBytes)),
+	}
+}
+
+// throttle waits until the bucket has n tokens.
+func (g *Gateway) throttle(ctx context.Context, l *rate.Limiter, n int, name string) error {
+	r := l.ReserveN(time.Now(), min(n, l.Burst()))
+	d := r.Delay()
+	if d == 0 {
+		return nil
+	}
+	g.metrics.Throttled.WithLabelValues(name).Inc()
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		r.Cancel()
+		return ctx.Err()
+	}
 }
 
 // reject tells the client why, then closes the connection.

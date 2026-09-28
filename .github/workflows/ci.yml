@@ -74,6 +74,9 @@ jobs:
           cache: npm
       - name: Start stack
         run: docker compose up --build --detach --wait --wait-timeout 180
+        env:
+          # The load check opens 200 sockets from one address.
+          MAX_CONNS_PER_IP: 0
       - run: curl -fsS http://localhost:8080/healthz && curl -fsS http://localhost:8080/readyz
       - name: 200 simulated editors through Caddy
         run: go run ./cmd/loadgen -url ws://localhost:8080/ws -editors 200 -ramp 3s -warmup 1s -duration 5s

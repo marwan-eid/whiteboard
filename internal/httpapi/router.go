@@ -11,6 +11,7 @@ import (
 
 	"whiteboard/internal/access"
 	"whiteboard/internal/metrics"
+	"whiteboard/internal/ratelimit"
 )
 
 type Deps struct {
@@ -24,6 +25,10 @@ type Deps struct {
 	Boards Boards
 	// KickLink disconnects a revoked link's live users.
 	KickLink func(boardID, linkID string)
+	// BoardCreates limits POST /api/boards per client IP (nil: no limit).
+	BoardCreates *ratelimit.Keyed
+	// TrustProxy takes the client IP from X-Forwarded-For (see config.TrustProxy).
+	TrustProxy bool
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -54,7 +59,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 
 	if d.Signer != nil && d.Boards != nil {
-		(&boardAPI{signer: d.Signer, boards: d.Boards, kickLink: d.KickLink}).register(mux)
+		(&boardAPI{
+			signer: d.Signer, boards: d.Boards, kickLink: d.KickLink,
+			creates: d.BoardCreates, trustProxy: d.TrustProxy, metrics: d.Metrics,
+		}).register(mux)
 	}
 
 	mux.Handle("GET /ws", d.Gateway)

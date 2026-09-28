@@ -44,6 +44,9 @@ func run() int {
 	res := loadgen.Run(ctx, cfg)
 	s := res.Summarize()
 	fmt.Printf("editors: %d connected, %d failed; %d ops sent in %.1fs\n", s.Connected, s.Failed, s.OpsSent, s.ElapsedS)
+	if s.Late > 0 {
+		fmt.Printf("  %d editors connected only after the warmup (a server limit? see MAX_CONNS_PER_IP): the run did not have its full load\n", s.Late)
+	}
 	for msg, n := range res.Errors {
 		fmt.Printf("  %dx %s\n", n, msg)
 	}
@@ -56,7 +59,7 @@ func run() int {
 			return 1
 		}
 	}
-	if s.Failed > 0 || s.Connected == 0 {
+	if s.Failed > 0 || s.Late > 0 || s.Connected == 0 {
 		return 1
 	}
 	return 0

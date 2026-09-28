@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"whiteboard/internal/access"
+	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/ratelimit"
 )
 
 // Boards is the board and share-link management the API exposes
@@ -22,9 +24,12 @@ type Boards interface {
 }
 
 type boardAPI struct {
-	signer   *access.Signer
-	boards   Boards
-	kickLink func(boardID, linkID string)
+	signer     *access.Signer
+	boards     Boards
+	kickLink   func(boardID, linkID string)
+	creates    *ratelimit.Keyed
+	trustProxy bool
+	metrics    *metrics.Metrics
 }
 
 func (a *boardAPI) register(mux *http.ServeMux) {
@@ -56,6 +61,11 @@ func (a *boardAPI) authed(h func(http.ResponseWriter, *http.Request, string)) ht
 }
 
 func (a *boardAPI) createBoard(w http.ResponseWriter, r *http.Request, guestID string) {
+	if a.creates != nil && !a.creates.Allow(ratelimit.ClientIP(r, a.trustProxy)) {
+		a.metrics.LimitRejections.WithLabelValues("board_creates").Inc()
+		http.Error(w, "too many new boards from this address; try again later", http.StatusTooManyRequests)
+		return
+	}
 	var body struct {
 		Title string `json:"title"`
 	}

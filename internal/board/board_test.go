@@ -543,3 +543,27 @@ func TestCursorsReachOthersAndDepartureIsAnnounced(t *testing.T) {
 	bd.SetCursor(10, 5, 6)
 	b.quiet(t)
 }
+
+func TestObjectCap(t *testing.T) {
+	e := newEnv(t, func(c *Config) { c.MaxObjects = 3 })
+	a := newConn(10)
+	bd, _ := e.join(t, "x", a)
+	ackOf := func(ob *pb.OpBatch) *pb.Ack {
+		t.Helper()
+		submit(t, bd, 10, ob)
+		return a.frame(t).Acks[0]
+	}
+	if ack := ackOf(batch(1, now.UnixMilli(), create("a:1", 1), create("a:2", 2))); ack.GetRejected() {
+		t.Fatalf("under the cap: %v", ack)
+	}
+	// Two more would make 4; ops on the same new id count once.
+	if ack := ackOf(batch(2, now.UnixMilli(), create("a:3", 3), move("a:1", 5), create("a:4", 4))); !ack.GetRejected() || !strings.Contains(ack.GetReason(), "full") {
+		t.Fatalf("over the cap: %v", ack)
+	}
+	if ack := ackOf(batch(3, now.UnixMilli(), create("a:3", 3), move("a:3", 4), move("a:1", 5))); ack.GetRejected() {
+		t.Fatalf("exactly at the cap, edits included: %v", ack)
+	}
+	if ack := ackOf(batch(4, now.UnixMilli(), move("a:2", 9))); ack.GetRejected() {
+		t.Fatalf("editing a full board: %v", ack)
+	}
+}

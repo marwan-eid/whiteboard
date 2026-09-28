@@ -74,6 +74,9 @@ type Config struct {
 	// SnapshotInterval if anything changed, whichever comes first.
 	SnapshotEvery    uint64
 	SnapshotInterval time.Duration
+	// MaxObjects caps the objects a board holds, deleted ones included (they
+	// are kept as tombstones). Batches that would create more are rejected.
+	MaxObjects int
 	// IOTimeout bounds each load, commit and snapshot write.
 	IOTimeout time.Duration
 	Now       func() time.Time
@@ -97,6 +100,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.IOTimeout == 0 {
 		c.IOTimeout = 10 * time.Second
+	}
+	if c.MaxObjects == 0 {
+		c.MaxObjects = 200_000
 	}
 	if c.Now == nil {
 		c.Now = time.Now
@@ -493,6 +499,10 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 		b.reject(clientID, cs, err.Error())
 		return
 	}
+	if n := b.newObjects(batch.GetOps()); n > 0 && b.doc.Len()+n > b.cfg.MaxObjects {
+		b.reject(clientID, cs, fmt.Sprintf("board is full (%d objects)", b.cfg.MaxObjects))
+		return
+	}
 
 	st := hlc.FromProto(batch.GetStamp())
 	st.ClientID = clientID
@@ -507,6 +517,20 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 	b.applyOps(clientID, cs, batch.GetOps(), st, received)
 	b.metrics.BatchesApplied.Inc()
 	b.ack(clientID, &pb.Ack{ClientSeq: cs, Seq: b.seq, Stamp: st.Proto()})
+}
+
+// newObjects counts the distinct objects a batch would create.
+func (b *Board) newObjects(ops []*pb.Op) int {
+	var seen map[string]bool
+	for _, op := range ops {
+		if id := op.GetId(); b.doc.Get(id) == nil && !seen[id] {
+			if seen == nil {
+				seen = make(map[string]bool)
+			}
+			seen[id] = true
+		}
+	}
+	return len(seen)
 }
 
 // applyOps merges a batch, assigns it the next seq and queues it for commit.

@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"whiteboard/internal/access"
 	"whiteboard/internal/board"
 	"whiteboard/internal/config"
@@ -26,6 +28,7 @@ import (
 	"whiteboard/internal/gateway"
 	"whiteboard/internal/httpapi"
 	"whiteboard/internal/metrics"
+	"whiteboard/internal/ratelimit"
 	"whiteboard/internal/store"
 )
 
@@ -80,7 +83,12 @@ func run() error {
 
 	m := metrics.New()
 	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st}, log, m)
-	gw := gateway.New(gateway.Config{Authorizer: accessStore, Signer: signer}, boards, log, m)
+	gw := gateway.New(gateway.Config{
+		Authorizer: accessStore,
+		Signer:     signer,
+		ConnsPerIP: ratelimit.NewCounter(cfg.MaxConnsPerIP),
+		TrustProxy: cfg.TrustProxy,
+	}, boards, log, m)
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
@@ -90,6 +98,9 @@ func run() error {
 			Signer:   signer,
 			Boards:   accessStore,
 			KickLink: boards.KickLink,
+			// 30 new private boards an hour per IP, 10 at once.
+			BoardCreates: ratelimit.NewKeyed(rate.Every(2*time.Minute), 10),
+			TrustProxy:   cfg.TrustProxy,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

@@ -50,6 +50,7 @@ This doc defines how each engineering target is measured. **Nothing here is a re
     - Traffic goes over loopback, so the numbers exclude real network latency. That is stated with the results.
 - **Secondary: over the internet.** A laptop runs about 100 editors against the public demo. This is a realistic end-to-end latency check, reported separately and labeled "WAN".
 - **Not used:** Oracle VMs. The free A1 allowance is fully allocated to the demo and MilkRun.
+- **Server limits:** the per-IP connection cap is turned off (`MAX_CONNS_PER_IP=0`), since each loadgen host is one address. The per-connection rate limits stay on.
 - **Loadgen host limits:** file-descriptor limit ≥ 65k and a larger ephemeral port range. Loadgen CPU is recorded; if it exceeds 70%, the run is invalid, because the loadgen rather than the server would be the bottleneck.
 - **Pre-check:** a local rehearsal with Docker, for debugging only. Its results are labeled "local".
 
