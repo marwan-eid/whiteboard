@@ -12,10 +12,12 @@ import { Controller } from "./canvas/tools";
 import { ShapeType } from "./gen/whiteboard/v1/protocol_pb";
 import { Connection, type ConnectionHandlers } from "./net/connection";
 import { randomClientId } from "./net/protocol";
-import { isVisible } from "./sync/doc";
+import { isVisible, type Doc } from "./sync/doc";
 import { History } from "./sync/history";
+import { HistoryView } from "./sync/historyView";
 import { Presence } from "./sync/presence";
 import { SyncSession } from "./sync/session";
+import { HistoryPanel } from "./ui/HistoryPanel";
 import { StatusBadge } from "./ui/StatusBadge";
 import { Toolbar } from "./ui/Toolbar";
 
@@ -48,6 +50,12 @@ handlers.onFrame = (f) => {
   sync.onFrame(f);
   presence.apply(f.cursors);
 };
+const historyView = new HistoryView({
+  request: (s) => connection.requestHistory(s),
+  restore: (s) => connection.restore(s),
+  head: () => sync.seq,
+});
+handlers.onHistory = (h) => historyView.onHistory(h);
 connection.start();
 
 const editor = new Editor();
@@ -57,7 +65,8 @@ const center = () => ({ x: stageHost.clientWidth / 2, y: stageHost.clientHeight 
 render(
   <>
     <StatusBadge connection={connection} session={sync} presence={presence} boardId={boardId} />
-    <Toolbar editor={editor} history={history} camera={camera} center={center} />
+    <Toolbar editor={editor} history={history} camera={camera} center={center} onOpenHistory={() => historyView.open()} />
+    <HistoryPanel view={historyView} />
   </>,
   uiHost,
 );
@@ -75,8 +84,20 @@ createStage(stageHost, camera)
     const textEditor = new TextEditor(uiHost, sync, history, camera, editor);
     new Controller({ canvas: app.canvas, session: sync, history, scene, overlay, editor, camera, presence, textEditor });
 
+    // History mode shows a past version read-only; live edits keep syncing underneath.
+    let shown: Doc | null = null;
+    historyView.subscribe(() => {
+      editor.setReadOnly(historyView.active);
+      const next = historyView.active ? (historyView.doc ?? shown) : null;
+      if (next !== shown) {
+        shown = next;
+        scene.setOverride(next);
+      }
+      overlay.invalidate();
+    });
+
     sync.subscribe((changed) => {
-      scene.update(changed);
+      if (!historyView.active) scene.update(changed);
       if (changed === null) {
         // A new snapshot: drop selections of objects that no longer exist.
         editor.select([...editor.selection].filter((id) => scene.geometryOf(id)));
@@ -105,6 +126,7 @@ declare global {
       cursors(): number;
       lod(): boolean;
       frameTimes(): number[];
+      history(): { active: boolean; seq: number; head: number; shown: string[] | null };
       geometry(id: string): { bounds: { x: number; y: number; w: number; h: number }; line?: { x: number; y: number }[] } | null;
     };
   }
@@ -126,6 +148,12 @@ const hooks: NonNullable<Window["__whiteboard"]> = {
   cursors: () => presence.others.size,
   lod: () => viewport.lod,
   frameTimes: () => [],
+  history: () => ({
+    active: historyView.active,
+    seq: historyView.seq,
+    head: historyView.head,
+    shown: historyView.doc ? [...historyView.doc.values()].filter(isVisible).map((o) => o.id) : null,
+  }),
   geometry: () => null,
 };
 window.__whiteboard = hooks;

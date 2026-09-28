@@ -20,7 +20,19 @@ function useSubscription(subscribe: (fn: () => void) => () => void): void {
   useEffect(() => subscribe(() => setTick((t) => t + 1)), [subscribe]);
 }
 
-export function Toolbar({ editor, history, camera, center }: { editor: Editor; history: History; camera: Camera; center: () => { x: number; y: number } }) {
+export function Toolbar({
+  editor,
+  history,
+  camera,
+  center,
+  onOpenHistory,
+}: {
+  editor: Editor;
+  history: History;
+  camera: Camera;
+  center: () => { x: number; y: number };
+  onOpenHistory: () => void;
+}) {
   useSubscription((fn) => editor.subscribe(fn));
   useSubscription((fn) => history.subscribe(fn));
   useSubscription((fn) => camera.subscribe(fn));
@@ -47,6 +59,10 @@ export function Toolbar({ editor, history, camera, center }: { editor: Editor; h
         </button>
         <button title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!history.canRedo} onClick={() => history.redo()}>
           ↷
+        </button>
+        <span class="sep" />
+        <button title="Version history" aria-label="Version history" data-tool="history" onClick={onOpenHistory}>
+          🕘
         </button>
       </div>
       <div class="zoom">

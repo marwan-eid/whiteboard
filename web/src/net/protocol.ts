@@ -45,6 +45,14 @@ export function encodeCursor(x: number, y: number): Uint8Array<ArrayBuffer> {
   return encode(create(ClientMessageSchema, { msg: { case: "cursor", value: { x, y } } }));
 }
 
+export function encodeHistoryRequest(seq: number): Uint8Array<ArrayBuffer> {
+  return encode(create(ClientMessageSchema, { msg: { case: "history", value: { seq: BigInt(seq) } } }));
+}
+
+export function encodeRestore(seq: number): Uint8Array<ArrayBuffer> {
+  return encode(create(ClientMessageSchema, { msg: { case: "restore", value: { seq: BigInt(seq) } } }));
+}
+
 export function decodeServerMessage(data: ArrayBuffer): ServerMessage {
   return fromBinary(ServerMessageSchema, new Uint8Array(data));
 }

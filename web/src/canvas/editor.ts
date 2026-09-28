@@ -16,6 +16,7 @@ export class Editor {
   readonly selection = new Set<string>();
   private _tool: ToolId = "select";
   private _editing: string | null = null;
+  private _readOnly = false;
   private readonly listeners = new Set<() => void>();
 
   get tool(): ToolId {
@@ -25,6 +26,17 @@ export class Editor {
   /** The object whose text is being edited, if any. */
   get editing(): string | null {
     return this._editing;
+  }
+
+  /** History mode: the canvas can be panned and zoomed but not edited. */
+  get readOnly(): boolean {
+    return this._readOnly;
+  }
+
+  setReadOnly(on: boolean): void {
+    this._readOnly = on;
+    if (on) this.selection.clear();
+    this.changed();
   }
 
   setTool(t: ToolId): void {

@@ -1,8 +1,18 @@
-import type { Frame, OpBatch, Welcome } from "../gen/whiteboard/v1/protocol_pb";
+import type { Frame, History, OpBatch, Welcome } from "../gen/whiteboard/v1/protocol_pb";
 import { ErrorCode } from "../gen/whiteboard/v1/protocol_pb";
 import { backoffDelay } from "./backoff";
 import { ClockSync } from "./clock";
-import { decodeServerMessage, encodeCursor, encodeHello, encodeOpBatch, encodeTimePing, encodeViewport, type ViewportRect } from "./protocol";
+import {
+  decodeServerMessage,
+  encodeCursor,
+  encodeHello,
+  encodeHistoryRequest,
+  encodeOpBatch,
+  encodeRestore,
+  encodeTimePing,
+  encodeViewport,
+  type ViewportRect,
+} from "./protocol";
 
 export type ConnectionState =
   | { status: "connecting"; attempt: number }
@@ -25,6 +35,7 @@ export interface SocketLike {
 export interface ConnectionHandlers {
   onWelcome(w: Welcome): void;
   onFrame(f: Frame): void;
+  onHistory(h: History): void;
   onDisconnect(): void;
 }
 
@@ -122,6 +133,22 @@ export class Connection {
     return true;
   }
 
+  /** Asks for the board as of seq; the reply arrives through onHistory. */
+  requestHistory(seq: number): boolean {
+    return this.sendRaw(encodeHistoryRequest(seq));
+  }
+
+  /** Asks the server to make the board look as it did at seq. */
+  restore(seq: number): boolean {
+    return this.sendRaw(encodeRestore(seq));
+  }
+
+  private sendRaw(data: Uint8Array<ArrayBuffer>): boolean {
+    if (!this.socket || !this.welcomed) return false;
+    this.socket.send(data);
+    return true;
+  }
+
   /** Sends the current viewport (from the viewport option) if welcomed. */
   sendViewport(): boolean {
     const v = this.opts.viewport();
@@ -165,6 +192,9 @@ export class Connection {
           break;
         case "frame":
           this.opts.handlers.onFrame?.(msg.value);
+          break;
+        case "history":
+          this.opts.handlers.onHistory?.(msg.value);
           break;
         case "timePong": {
           const rttMs = this.opts.now() - msg.value.t0;

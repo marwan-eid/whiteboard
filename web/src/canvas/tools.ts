@@ -110,7 +110,7 @@ export class Controller {
     const s = this.screenPoint(e);
     const w = this.d.camera.toWorld(s);
     const tool = this.d.editor.tool;
-    if (e.button === 1 || this.spaceHeld || tool === "hand") {
+    if (e.button === 1 || this.spaceHeld || tool === "hand" || this.d.editor.readOnly) {
       this.drag = { kind: "pan", last: s };
       this.d.canvas.style.cursor = "grabbing";
       return;
@@ -354,7 +354,7 @@ export class Controller {
   }
 
   private onDoubleClick(e: MouseEvent): void {
-    if (this.d.editor.tool !== "select") return;
+    if (this.d.editor.tool !== "select" || this.d.editor.readOnly) return;
     const w = this.d.camera.toWorld(this.screenPoint(e));
     const hit = this.d.scene.hitTest(w);
     if (hit) {
@@ -396,6 +396,7 @@ export class Controller {
       e.preventDefault();
       return;
     }
+    if (editor.readOnly) return; // history mode: look, don't edit
     if (mod && key === "z") {
       e.preventDefault();
       if (e.shiftKey) history.redo();

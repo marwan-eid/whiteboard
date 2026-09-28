@@ -142,3 +142,55 @@ body {
   word-break: break-word;
   pointer-events: auto;
 }
+
+.history {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history .muted {
+  color: var(--muted);
+}
+
+.history input[type="range"] {
+  width: 100%;
+}
+
+.history button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.history button.primary {
+  background: #0969da;
+  border-color: #0969da;
+  color: #fff;
+}
+
+.history button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

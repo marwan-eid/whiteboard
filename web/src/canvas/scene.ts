@@ -1,6 +1,6 @@
 import { Container, Particle, ParticleContainer, Texture } from "pixi.js";
 import { ShapeType } from "../gen/whiteboard/v1/protocol_pb";
-import { isVisible } from "../sync/doc";
+import { isVisible, type Doc } from "../sync/doc";
 import type { SyncSession } from "../sync/session";
 import type { Camera } from "./camera";
 import type { Editor } from "./editor";
@@ -65,6 +65,19 @@ export class Scene {
     });
   }
 
+  /** The document drawn: a history version when set, otherwise the live one. */
+  private override: Doc | null = null;
+
+  private get doc(): Doc {
+    return this.override ?? this.session.doc;
+  }
+
+  /** Shows another document (a past version), or the live one again with null. */
+  setOverride(d: Doc | null): void {
+    this.override = d;
+    this.update(null);
+  }
+
   get isLOD(): boolean {
     return this.lod;
   }
@@ -90,11 +103,11 @@ export class Scene {
 
   /** Redraws the given objects (and arrows attached to them), or everything when null. */
   update(changed: ReadonlySet<string> | null): void {
-    const ids = new Set(changed ?? [...this.entries.keys(), ...[...this.session.doc.values()].map((o) => o.id)]);
+    const ids = new Set(changed ?? [...this.entries.keys(), ...[...this.doc.values()].map((o) => o.id)]);
     for (const id of [...ids]) for (const dep of this.dependents.get(id) ?? []) ids.add(dep);
 
     for (const id of ids) {
-      const o = this.session.doc.get(id);
+      const o = this.doc.get(id);
       let e = this.entries.get(id);
       if (!o || !isVisible(o)) {
         if (e) {
@@ -106,7 +119,7 @@ export class Scene {
         this.setArrowTargets(id, []);
         continue;
       }
-      const geom = geometry(this.session.doc, o);
+      const geom = geometry(this.doc, o);
       if (!e) {
         e = { z: "", geom };
         this.entries.set(id, e);
