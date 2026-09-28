@@ -293,3 +293,8 @@ body {
 .board-menu .error {
   color: var(--bad);
 }
+
+.status .warn {
+  color: var(--warn);
+  font-weight: 600;
+}

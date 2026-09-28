@@ -3,6 +3,10 @@ import type { Connection, ConnectionState } from "../net/connection";
 import type { Presence } from "../sync/presence";
 import type { SyncSession } from "../sync/session";
 
+// Past this many unsynced batches the count turns into a warning. Nothing is
+// dropped: the edits stay in IndexedDB until the server has them.
+const MANY_UNSYNCED = 5_000;
+
 export function StatusBadge({ connection, session, presence, boardId, viewOnly }: { connection: Connection; session: SyncSession; presence: Presence; boardId: string; viewOnly: boolean }) {
   const [state, setState] = useState<ConnectionState>(connection.state);
   const [pending, setPending] = useState(session.pendingCount);
@@ -15,7 +19,11 @@ export function StatusBadge({ connection, session, presence, boardId, viewOnly }
     <div class="status" data-status={state.status}>
       <span class="dot" />
       <span>{describe(state)}</span>
-      {pending > 0 && <span class="muted">{pending} unsynced</span>}
+      {pending > 0 && (
+        <span class={pending > MANY_UNSYNCED ? "warn" : "muted"} title={pending > MANY_UNSYNCED ? "Many edits are waiting for the server. They are saved in this browser; reconnect to sync them." : undefined}>
+          {pending} unsynced
+        </span>
+      )}
       {others > 0 && <span class="muted">{others} other{others === 1 ? "" : "s"} here</span>}
       {viewOnly && <span class="muted" data-testid="view-only">view only</span>}
       <span class="muted">board: {boardId}</span>

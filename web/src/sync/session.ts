@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { OpBatchSchema, type Frame, type Op, type OpBatch, type Welcome } from "../gen/whiteboard/v1/protocol_pb";
 import { Doc } from "./doc";
+import type { Restored, SessionStore } from "./persist";
 import { HybridClock, stampFromProto, stampToProto, type Stamp } from "./stamp";
 
 export interface SessionOptions {
@@ -11,6 +12,10 @@ export interface SessionOptions {
   send: (batch: OpBatch) => boolean;
   /** Reconnects to get a fresh snapshot. */
   resync: () => void;
+  /** Where unsynced edits are saved (see persist.ts); none keeps them in memory only. */
+  store?: SessionStore | null;
+  /** State saved by an earlier page under the same client id. */
+  restored?: Restored | null;
 }
 
 /** null means "everything may have changed" (a new snapshot). */
@@ -48,6 +53,18 @@ export class SyncSession {
     this.clientId = opts.clientId;
     this.clock = new HybridClock(opts.clientId, opts.now);
     this.idPrefix = `${opts.clientId.toString(36)}:`;
+    const r = opts.restored;
+    if (r) {
+      this.nextClientSeq = r.nextClientSeq;
+      this.nextObject = r.nextObject;
+      // Show the saved edits at once; the Welcome replaces the replica and reapplies them.
+      for (const batch of r.pending) {
+        const stamp = { ...stampFromProto(batch.stamp), clientId: opts.clientId };
+        this.clock.observe(stamp);
+        this.pending.push({ batch, stamp });
+        this.doc.applyBatch(batch.ops, stamp);
+      }
+    }
   }
 
   get pendingCount(): number {
@@ -65,7 +82,9 @@ export class SyncSession {
 
   /** An object id no other client can generate. */
   newObjectId(): string {
-    return this.idPrefix + (++this.nextObject).toString(36);
+    const id = this.idPrefix + (++this.nextObject).toString(36);
+    this.saveCounters();
+    return id;
   }
 
   /** Applies ops locally now and queues them for the server. */
@@ -75,6 +94,8 @@ export class SyncSession {
     const batch = create(OpBatchSchema, { clientSeq: BigInt(this.nextClientSeq++), stamp: stampToProto(stamp), ops });
     const changed = this.doc.applyBatch(ops, stamp);
     this.pending.push({ batch, stamp });
+    this.opts.store?.saveBatch(batch);
+    this.saveCounters();
     this.opts.send(batch);
     this.emit(changed);
   }
@@ -84,7 +105,16 @@ export class SyncSession {
     this.doc = Doc.fromSnapshot(w.objects);
     this.serverSeq = Number(w.seq);
     this.held = new Set(w.objects.map((o) => o.id));
-    this.pending = this.pending.filter((p) => Number(p.batch.clientSeq) > lastApplied);
+    this.pending = this.pending.filter((p) => {
+      const applied = Number(p.batch.clientSeq) <= lastApplied;
+      if (applied) this.opts.store?.dropBatch(p.batch.clientSeq);
+      return !applied;
+    });
+    // With a reused client id, never issue a client seq the server has seen.
+    if (this.nextClientSeq <= lastApplied) {
+      this.nextClientSeq = lastApplied + 1;
+      this.saveCounters();
+    }
     for (const p of this.pending) this.doc.applyBatch(p.batch.ops, p.stamp);
     for (const o of w.objects) for (const fs of o.stamps) this.clock.observe(stampFromProto(fs.stamp));
     for (const p of this.pending) this.opts.send(p.batch);
@@ -125,6 +155,7 @@ export class SyncSession {
       const i = this.pending.findIndex((p) => p.batch.clientSeq === a.clientSeq);
       if (i < 0) continue;
       const [sent] = this.pending.splice(i, 1);
+      this.opts.store?.dropBatch(a.clientSeq);
       for (const op of sent!.batch.ops) acked.add(op.id);
       if (a.rejected) {
         resync = true;
@@ -148,6 +179,10 @@ export class SyncSession {
       return;
     }
     this.emit(changed);
+  }
+
+  private saveCounters(): void {
+    this.opts.store?.saveCounters(this.nextClientSeq, this.nextObject);
   }
 
   /** Objects with unacknowledged local edits. */

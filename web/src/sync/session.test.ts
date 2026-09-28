@@ -16,6 +16,7 @@ import {
   type Welcome,
 } from "../gen/whiteboard/v1/protocol_pb";
 import { Doc } from "./doc";
+import type { Restored, SessionStore } from "./persist";
 import { SyncSession } from "./session";
 import { stampFromProto, stampToProto } from "./stamp";
 
@@ -101,8 +102,32 @@ class ModelServer {
   }
 }
 
+/** What IdbStore keeps, held in memory. */
+class MemoryStore implements SessionStore {
+  batches = new Map<bigint, OpBatch>();
+  counters = { nextClientSeq: 1, nextObject: 0 };
+
+  saveBatch(b: OpBatch): void {
+    this.batches.set(b.clientSeq, b);
+  }
+
+  dropBatch(clientSeq: bigint): void {
+    this.batches.delete(clientSeq);
+  }
+
+  saveCounters(nextClientSeq: number, nextObject: number): void {
+    this.counters = { nextClientSeq, nextObject };
+  }
+
+  restored(): Restored {
+    const pending = [...this.batches.values()].sort((a, b) => Number(a.clientSeq - b.clientSeq));
+    return { ...this.counters, pending };
+  }
+}
+
 class ModelClient {
-  readonly session: SyncSession;
+  session: SyncSession;
+  readonly store = new MemoryStore();
   inbox: (Welcome | Frame)[] = [];
   outbox: OpBatch[] = [];
   connected = false;
@@ -111,11 +136,17 @@ class ModelClient {
   constructor(
     readonly id: number,
     private readonly server: ModelServer,
-    now: () => number,
+    private readonly now: () => number,
   ) {
-    this.session = new SyncSession({
-      clientId: id,
-      now,
+    this.session = this.newSession(null);
+  }
+
+  private newSession(restored: Restored | null): SyncSession {
+    return new SyncSession({
+      clientId: this.id,
+      now: this.now,
+      store: this.store,
+      restored,
       send: (b) => {
         if (!this.welcomed) return false;
         this.outbox.push(b);
@@ -126,6 +157,12 @@ class ModelClient {
         this.connect();
       },
     });
+  }
+
+  /** Closes the page and opens it again under the same client id, from what the store saved. */
+  reload(): void {
+    this.disconnect();
+    this.session = this.newSession(this.store.restored());
   }
 
   connect(): void {
@@ -168,7 +205,7 @@ function snapshotsEqual(a: Doc, b: Doc): boolean {
 type Action =
   | { kind: "edit"; client: number; target: number; props: Partial<ObjectProps> }
   | { kind: "create"; client: number }
-  | { kind: "in" | "out" | "disconnect" | "connect"; client: number }
+  | { kind: "in" | "out" | "disconnect" | "connect" | "reload"; client: number }
   | { kind: "tick" };
 
 const N = 3;
@@ -192,6 +229,7 @@ const actionArb: fc.Arbitrary<Action> = fc.oneof(
   { weight: 1, arbitrary: fc.record({ kind: fc.constant("create" as const), client: clientArb }) },
   { weight: 1, arbitrary: fc.record({ kind: fc.constant("disconnect" as const), client: clientArb }) },
   { weight: 2, arbitrary: fc.record({ kind: fc.constant("connect" as const), client: clientArb }) },
+  { weight: 1, arbitrary: fc.record({ kind: fc.constant("reload" as const), client: clientArb }) },
   { weight: 2, arbitrary: fc.constant({ kind: "tick" as const }) },
 );
 
@@ -229,6 +267,9 @@ function run(actions: Action[]): { server: ModelServer; clients: ModelClient[] }
       case "connect":
         c.connect();
         break;
+      case "reload":
+        c.reload();
+        break;
       case "create": {
         const id = c.session.newObjectId();
         known.push(id);
@@ -259,12 +300,13 @@ function run(actions: Action[]): { server: ModelServer; clients: ModelClient[] }
 }
 
 describe("SyncSession against a model server", () => {
-  it("converges after random delivery, disconnects and reconnects", () => {
+  it("converges after random delivery, disconnects, reloads and reconnects", () => {
     fc.assert(
       fc.property(fc.array(actionArb, { maxLength: 150 }), (actions) => {
         const { server, clients } = run(actions);
         for (const c of clients) {
           expect(c.session.pendingCount, `client ${c.id} pending`).toBe(0);
+          expect(c.store.batches.size, `client ${c.id} saved batches`).toBe(0);
           expect(c.session.seq, `client ${c.id} seq`).toBe(server.seq);
           expect(snapshotsEqual(c.session.doc, server.visibleSnapshot()), `client ${c.id} replica`).toBe(true);
         }

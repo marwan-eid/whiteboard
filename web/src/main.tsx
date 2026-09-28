@@ -12,10 +12,10 @@ import { Controller } from "./canvas/tools";
 import { Role, ShapeType } from "./gen/whiteboard/v1/protocol_pb";
 import { Api } from "./net/api";
 import { Connection, type ConnectionHandlers } from "./net/connection";
-import { randomClientId } from "./net/protocol";
 import { isVisible, type Doc } from "./sync/doc";
 import { History } from "./sync/history";
 import { HistoryView } from "./sync/historyView";
+import { acquireIdentity } from "./sync/persist";
 import { Presence } from "./sync/presence";
 import { SyncSession } from "./sync/session";
 import { BoardMenu } from "./ui/BoardMenu";
@@ -24,11 +24,13 @@ import { StatusBadge } from "./ui/StatusBadge";
 import { Toolbar } from "./ui/Toolbar";
 
 const boardId = boardIdFromPath(location.pathname);
-const clientId = randomClientId();
 // A share link carries its token in the URL fragment, which never reaches server logs.
 const shareToken = shareTokenFromHash(location.hash);
 const api = new Api();
-let guestToken = "";
+// This tab's client id on the board, with edits an earlier page left unsynced;
+// and who we are (a first visit asks the server for a guest identity).
+const [identity, guestToken] = await Promise.all([acquireIdentity(boardId), api.guestToken()]);
+const clientId = identity.clientId;
 
 // The connection delivers board traffic to the session, which sends through
 // the connection; they are wired through these handlers.
@@ -53,6 +55,8 @@ const sync = new SyncSession({
   now: () => connection.serverNow(),
   send: (b) => connection.sendBatch(b),
   resync: () => connection.resync(),
+  store: identity.store,
+  restored: identity.restored,
 });
 const presence = new Presence((p) => connection.sendCursor(p.x, p.y));
 const editor = new Editor();
@@ -76,11 +80,7 @@ const historyView = new HistoryView({
   head: () => sync.seq,
 });
 handlers.onHistory = (h) => historyView.onHistory(h);
-// Connect once we know who we are (a first visit asks the server for a guest identity).
-void api.guestToken().then((t) => {
-  guestToken = t;
-  connection.start();
-});
+connection.start();
 
 const history = new History(sync);
 const center = () => ({ x: stageHost.clientWidth / 2, y: stageHost.clientHeight / 2 });

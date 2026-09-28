@@ -232,7 +232,12 @@ sequenceDiagram
   O-->>C: subsequent Frames
 ```
 - **Clock clamp:** HLC values ahead of server time by more than the allowed skew are clamped, so an offline client with a wrong clock can't overwrite newer work.
-- **Bounded queue:** the offline queue is capped at 10k ops or 5 MB. Beyond that, the client shows a warning.
+- **Offline queue (W6):** unacknowledged batches are written to IndexedDB (`web/src/sync/persist.ts`), so they survive a reload, a crash or a closed tab. Writes are grouped into one transaction per 100 ms and committed at once when the page is hidden.
+  - **Client id per tab:** each tab works under its own client id per board (the server allows one live connection per id). The id is held with a Web Lock while the tab lives. A tab that opens later takes over an unheld id with its saved batches and counters, and resends; the server skips batches it already applied. Two tabs never share an id.
+  - **Counters:** the next client seq and object number are saved too. A reused id must never repeat a client seq the server has seen, or the server would ack the new batch as a duplicate without applying it; the `Welcome`'s `lastClientSeq` is a second guard.
+  - **No hard cap:** dropping edits would lose work, so the queue is not cut. Past 5,000 unsynced batches the status turns into a warning. A long offline drag queues a batch per pointer event; merging them is later work.
+  - Without IndexedDB or Web Locks (plain-HTTP origins other than localhost), edits live in memory only, as before.
+  - Tested by the randomized session test, which reloads clients from their saved state mid-run, and by a browser test that reloads while the server is down.
 
 ### 3.5 History replay and point-in-time restore
 - **Compaction:** after each snapshot, log entries up to it move into `op_segments`: zstd-compressed runs of up to 10,000 entries. Each segment is written, and its rows deleted, in one transaction, so every seq is stored exactly once. Loading a board never reads segments; history does. Measured: 1M edits take 31 MB with full history, against 172 MB as one row per edit ([results](../benchmarks/results/2026-09-28-storage.md)).
