@@ -133,6 +133,7 @@ createStage(stageHost, camera)
     });
     scene.update(null);
     hooks.frameTimes = () => frames.recent.splice(0);
+    hooks.ready = () => true;
     hooks.geometry = (id) => {
       const g = scene.geometryOf(id);
       return g ? { bounds: g.bounds, line: g.line } : null;
@@ -152,6 +153,8 @@ declare global {
       camera(): { x: number; y: number; zoom: number };
       cursors(): number;
       lod(): boolean;
+      /** True once the canvas takes input (it starts asynchronously, maybe after the Welcome). */
+      ready(): boolean;
       frameTimes(): number[];
       history(): { active: boolean; seq: number; head: number; shown: string[] | null };
       geometry(id: string): { bounds: { x: number; y: number; w: number; h: number }; line?: { x: number; y: number }[] } | null;
@@ -174,6 +177,7 @@ const hooks: NonNullable<Window["__whiteboard"]> = {
   camera: () => ({ x: camera.x, y: camera.y, zoom: camera.zoom }),
   cursors: () => presence.others.size,
   lod: () => viewport.lod,
+  ready: () => false,
   frameTimes: () => [],
   history: () => ({
     active: historyView.active,

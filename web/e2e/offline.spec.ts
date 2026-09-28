@@ -8,6 +8,12 @@ const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible().len
 const pending = (p: Page) => p.evaluate(() => window.__whiteboard!.pending());
 const status = (p: Page) => p.locator(".status");
 
+/** Waits until the page is connected and its canvas takes input. */
+async function connected(p: Page): Promise<void> {
+  await expect(status(p)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
+  await expect.poll(() => p.evaluate(() => window.__whiteboard!.ready()), { timeout: 15_000 }).toBe(true);
+}
+
 // A failed test must not leave the node down for the specs after it.
 test.afterEach(() => {
   compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1");
@@ -17,7 +23,7 @@ test("unsynced edits survive a reload while offline and sync when the server is 
   test.setTimeout(120_000);
   const board = `e2e-offline-${Date.now()}`;
   await page.goto(`/b/${board}`);
-  await expect(status(page)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
+  await connected(page);
   await page.mouse.dblclick(200, 200);
   await expect.poll(() => pending(page)).toBe(0);
 
@@ -55,8 +61,8 @@ test("two tabs of one browser on the same board both stay connected", async ({ c
   const b = await context.newPage();
   await a.goto(`/b/${board}`);
   await b.goto(`/b/${board}`);
-  await expect(status(a)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
-  await expect(status(b)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
+  await connected(a);
+  await connected(b);
 
   await a.mouse.dblclick(300, 300);
   await b.mouse.dblclick(600, 300);
@@ -65,7 +71,7 @@ test("two tabs of one browser on the same board both stay connected", async ({ c
 
   // Reloading one tab takes back its own id, not the other tab's.
   await b.reload();
-  await expect(status(b)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
+  await connected(b);
   await expect(status(a)).toHaveAttribute("data-status", "connected");
   await b.mouse.dblclick(450, 500);
   await expect.poll(() => visible(a)).toBe(3);
