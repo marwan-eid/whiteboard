@@ -16,6 +16,8 @@ message ClientMessage {
     OpBatch op_batch = 3;
     Cursor cursor = 4;
     Viewport viewport = 5;
+    HistoryRequest history = 6;
+    RestoreRequest restore = 7;
   }
 }
 
@@ -25,6 +27,7 @@ message ServerMessage {
     TimePong time_pong = 2;
     ServerError error = 3;
     Frame frame = 4;
+    History history = 5;
   }
 }
 
@@ -222,4 +225,27 @@ message ObjectState {
 message FieldStamps {
   Stamp stamp = 1;
   uint32 field_mask = 2;
+}
+
+// ---------------------------------------------------------------------------
+// History (docs/ARCHITECTURE.md, "History replay and point-in-time restore").
+
+// Asks for the board as it was right after batch seq (0: empty board).
+message HistoryRequest {
+  uint64 seq = 1;
+}
+
+// The board as of seq, limited to the client's viewport.
+message History {
+  uint64 seq = 1;
+  // When the batch at seq was made (0 if unknown).
+  int64 wall_ms = 2;
+  repeated ObjectState objects = 3;
+}
+
+// Makes the board look as it did at seq. The server appends the difference
+// as one new batch, so history stays append-only and a restore can itself
+// be undone by restoring again.
+message RestoreRequest {
+  uint64 seq = 1;
 }

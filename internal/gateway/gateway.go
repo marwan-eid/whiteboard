@@ -148,6 +148,13 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 		g.writeLoop(writeCtx, c, conn.send)
 	}()
 
+	// History requests run on their own goroutine so rebuilding old states
+	// never blocks this connection; a newer request replaces a waiting one.
+	view := hello.GetViewport()
+	history := make(chan historyJob, 1)
+	defer close(history)
+	go g.historyLoop(ctx, b, conn, history)
+
 	var lastCursor time.Time
 	for {
 		msg, err := g.read(ctx, c, 0)
@@ -183,6 +190,17 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 			}
 			if err := b.SetViewport(ctx, conn, m.Viewport); err != nil {
 				return err
+			}
+			view = m.Viewport
+		case *pb.ClientMessage_History:
+			select {
+			case <-history:
+			default:
+			}
+			history <- historyJob{seq: m.History.GetSeq(), view: view}
+		case *pb.ClientMessage_Restore:
+			if err := b.Restore(ctx, m.Restore.GetSeq()); err != nil {
+				g.log.Warn("restore failed", "seq", m.Restore.GetSeq(), "err", err)
 			}
 		default:
 			return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_BAD_REQUEST, "unexpected message")
@@ -252,6 +270,10 @@ func messageType(msg *pb.ClientMessage) string {
 		return "cursor"
 	case *pb.ClientMessage_Viewport:
 		return "viewport"
+	case *pb.ClientMessage_History:
+		return "history"
+	case *pb.ClientMessage_Restore:
+		return "restore"
 	default:
 		return "unknown"
 	}
@@ -314,4 +336,26 @@ func (c *clientConn) Kick(reason board.KickReason) {
 			}
 		}()
 	})
+}
+
+type historyJob struct {
+	seq  uint64
+	view *pb.Viewport
+}
+
+func (g *Gateway) historyLoop(ctx context.Context, b *board.Board, conn *clientConn, jobs <-chan historyJob) {
+	for job := range jobs {
+		h, err := b.History(ctx, job.seq, job.view)
+		if err != nil {
+			g.log.Warn("history failed", "seq", job.seq, "err", err)
+			continue
+		}
+		data, err := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_History{History: h}})
+		if err != nil {
+			continue
+		}
+		if !conn.Send(data) {
+			conn.Kick(board.KickSlow)
+		}
+	}
 }

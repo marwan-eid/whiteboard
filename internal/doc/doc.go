@@ -221,3 +221,71 @@ func isEmpty(p *pb.ObjectProps) bool {
 	})
 	return empty
 }
+
+// Clone returns an independent copy.
+func (d *Doc) Clone() *Doc {
+	c, err := FromSnapshot(d.Snapshot())
+	if err != nil {
+		panic(err) // a snapshot of a valid doc always loads
+	}
+	return c
+}
+
+// Diff returns ops that, applied with a stamp newer than anything in from,
+// make from's visible objects match to's (see the note on unset fields below): objects visible only in from are
+// deleted, and objects visible in to get every property that differs
+// (restoring deleted ones). Point-in-time restore uses it.
+func Diff(from, to *Doc) []*pb.Op {
+	ids := map[string]bool{}
+	for id, o := range from.objects {
+		if o.Visible() {
+			ids[id] = true
+		}
+	}
+	for id, o := range to.objects {
+		if o.Visible() {
+			ids[id] = true
+		}
+	}
+	sorted := make([]string, 0, len(ids))
+	for id := range ids {
+		sorted = append(sorted, id)
+	}
+	sort.Strings(sorted)
+
+	var ops []*pb.Op
+	for _, id := range sorted {
+		fo, tobj := from.objects[id], to.objects[id]
+		switch {
+		case tobj == nil || !tobj.Visible():
+			ops = append(ops, &pb.Op{Id: id, Props: &pb.ObjectProps{Deleted: proto.Bool(true)}})
+		default:
+			props := proto.CloneOf(tobj.Props)
+			if fo != nil && fo.Created() {
+				props.Type = nil // fixed at create
+			}
+			if fo != nil && fo.Visible() {
+				// Keep only what differs.
+				m, fm := props.ProtoReflect(), fo.Props.ProtoReflect()
+				m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+					if fm.Has(fd) && fm.Get(fd).Equal(v) {
+						m.Clear(fd)
+					}
+					return true
+				})
+			} else {
+				props.Deleted = proto.Bool(false)
+			}
+			// A register cannot be unset. Text written since then is cleared (it
+			// renders the same as no text); other fields first set after the
+			// restore point keep their values (the UI sets them at create).
+			if fo != nil && tobj.Props.Text == nil && fo.Props.GetText() != "" {
+				props.Text = proto.String("")
+			}
+			if !isEmpty(props) {
+				ops = append(ops, &pb.Op{Id: id, Props: props})
+			}
+		}
+	}
+	return ops
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net/http/httptest"
 	"os"
@@ -247,25 +248,23 @@ func TestRandomizedConvergenceWithCrashesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	forSeeds(t, 2, func(t *testing.T, seed uint64) {
-		_, _ = pool.Exec(context.Background(), "DELETE FROM ops; DELETE FROM snapshots; DELETE FROM boards")
+		if _, err := pool.Exec(context.Background(), "DELETE FROM ops; DELETE FROM op_segments; DELETE FROM snapshots; DELETE FROM boards"); err != nil {
+			t.Fatal(err)
+		}
 		st, err := store.NewPostgres(pool)
 		if err != nil {
 			t.Fatal(err)
 		}
 		s := startServerWith(t, st)
+		// The whole log, compacted or not.
 		s.logged = func(t *testing.T) map[[2]uint64]bool {
-			rows, err := pool.Query(context.Background(), "SELECT client_id, client_seq FROM ops WHERE board_id = $1", "b")
+			entries, err := st.Range(context.Background(), "b", 0, math.MaxInt64)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer rows.Close()
 			out := map[[2]uint64]bool{}
-			for rows.Next() {
-				var c, cs int64
-				if err := rows.Scan(&c, &cs); err != nil {
-					t.Fatal(err)
-				}
-				out[[2]uint64{uint64(c), uint64(cs)}] = true
+			for _, e := range entries {
+				out[[2]uint64{e.ClientID, e.ClientSeq}] = true
 			}
 			return out
 		}
@@ -496,5 +495,98 @@ func dumpTraces(t *testing.T, err error) {
 			}
 			return true
 		})
+	}
+}
+
+func TestHistoryAndRestore(t *testing.T) {
+	s := startServer(t)
+	a, b := s.client(t, 10), s.client(t, 11) // base 36: "a", "b"
+	connect(t, a, b)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	a.Edit(rect("a:1", 0))                                         // seq 1
+	a.Edit(rect("a:2", 50))                                        // seq 2
+	a.Edit(set("a:1", &pb.ObjectProps{X: proto.Float64(99)}))      // seq 3
+	a.Edit(set("a:2", &pb.ObjectProps{Deleted: proto.Bool(true)})) // seq 4
+	s.settle(t, a, b)
+
+	h, err := b.HistoryAt(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.GetObjects()) != 2 || h.GetObjects()[0].GetProps().GetX() != 0 || h.GetWallMs() == 0 {
+		t.Fatalf("history at 2 = %v", h)
+	}
+	if h, _ := b.HistoryAt(ctx, 0); len(h.GetObjects()) != 0 {
+		t.Fatalf("history at 0 = %v, want empty", h)
+	}
+
+	// Restore to seq 2: a:1 moves back, a:2 comes back. Everyone sees it,
+	// including the client that asked.
+	if err := b.Restore(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		p1, p2 := a.Object("a:1"), b.Object("a:2")
+		if p1.GetX() == 0 && p2 != nil && !p2.GetDeleted() && b.Object("a:1").GetX() == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("restore not seen: a:1=%v a:2=%v", p1, p2)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.settle(t, a, b)
+
+	// The restore is itself history: going back to seq 4 undoes it.
+	if err := a.Restore(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	for a.Object("a:1").GetX() != 99 || b.Object("a:2") != nil {
+		if time.Now().After(deadline.Add(5 * time.Second)) {
+			t.Fatalf("undoing the restore not seen: a:1=%v a:2=%v", a.Object("a:1"), b.Object("a:2"))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// History reads across snapshots, compacted segments and keyframes (Postgres).
+func TestHistoryAcrossCompactionPostgres(t *testing.T) {
+	pool := dbtest.NewPool(t)
+	if _, err := db.Migrate(context.Background(), pool); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.NewPostgres(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := startServerWith(t, st) // snapshots every 50 batches, then compaction
+	a := s.client(t, 10)
+	connect(t, a)
+	a.Edit(rect("a:1", 0)) // seq 1
+	const n = 1500
+	for i := 1; i <= n; i++ {
+		a.Edit(set("a:1", &pb.ObjectProps{X: proto.Float64(float64(i))})) // seq i+1
+		if i%100 == 0 {
+			s.settle(t, a) // spread batches over ticks so snapshots happen along the way
+		}
+	}
+	s.settle(t, a)
+	var segments int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM op_segments").Scan(&segments); err != nil || segments == 0 {
+		t.Fatalf("no compaction happened (segments=%d, err=%v)", segments, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, seq := range []uint64{1, 2, 49, 50, 51, 777, 1201, 1202, 1300, n + 1, 1203} {
+		h, err := a.HistoryAt(ctx, seq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := h.GetObjects()[0].GetProps().GetX(), float64(seq-1); got != want {
+			t.Fatalf("x at seq %d = %v, want %v", seq, got, want)
+		}
 	}
 }

@@ -144,6 +144,8 @@ type ClientMessage struct {
 	//	*ClientMessage_OpBatch
 	//	*ClientMessage_Cursor
 	//	*ClientMessage_Viewport
+	//	*ClientMessage_History
+	//	*ClientMessage_Restore
 	Msg           isClientMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -231,6 +233,24 @@ func (x *ClientMessage) GetViewport() *Viewport {
 	return nil
 }
 
+func (x *ClientMessage) GetHistory() *HistoryRequest {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_History); ok {
+			return x.History
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetRestore() *RestoreRequest {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_Restore); ok {
+			return x.Restore
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Msg interface {
 	isClientMessage_Msg()
 }
@@ -255,6 +275,14 @@ type ClientMessage_Viewport struct {
 	Viewport *Viewport `protobuf:"bytes,5,opt,name=viewport,proto3,oneof"`
 }
 
+type ClientMessage_History struct {
+	History *HistoryRequest `protobuf:"bytes,6,opt,name=history,proto3,oneof"`
+}
+
+type ClientMessage_Restore struct {
+	Restore *RestoreRequest `protobuf:"bytes,7,opt,name=restore,proto3,oneof"`
+}
+
 func (*ClientMessage_Hello) isClientMessage_Msg() {}
 
 func (*ClientMessage_TimePing) isClientMessage_Msg() {}
@@ -265,6 +293,10 @@ func (*ClientMessage_Cursor) isClientMessage_Msg() {}
 
 func (*ClientMessage_Viewport) isClientMessage_Msg() {}
 
+func (*ClientMessage_History) isClientMessage_Msg() {}
+
+func (*ClientMessage_Restore) isClientMessage_Msg() {}
+
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -273,6 +305,7 @@ type ServerMessage struct {
 	//	*ServerMessage_TimePong
 	//	*ServerMessage_Error
 	//	*ServerMessage_Frame
+	//	*ServerMessage_History
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -351,6 +384,15 @@ func (x *ServerMessage) GetFrame() *Frame {
 	return nil
 }
 
+func (x *ServerMessage) GetHistory() *History {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_History); ok {
+			return x.History
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -371,6 +413,10 @@ type ServerMessage_Frame struct {
 	Frame *Frame `protobuf:"bytes,4,opt,name=frame,proto3,oneof"`
 }
 
+type ServerMessage_History struct {
+	History *History `protobuf:"bytes,5,opt,name=history,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Msg() {}
 
 func (*ServerMessage_TimePong) isServerMessage_Msg() {}
@@ -378,6 +424,8 @@ func (*ServerMessage_TimePong) isServerMessage_Msg() {}
 func (*ServerMessage_Error) isServerMessage_Msg() {}
 
 func (*ServerMessage_Frame) isServerMessage_Msg() {}
+
+func (*ServerMessage_History) isServerMessage_Msg() {}
 
 // First message on every connection.
 type Hello struct {
@@ -1657,23 +1705,180 @@ func (x *FieldStamps) GetFieldMask() uint32 {
 	return 0
 }
 
+// Asks for the board as it was right after batch seq (0: empty board).
+type HistoryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HistoryRequest) Reset() {
+	*x = HistoryRequest{}
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HistoryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HistoryRequest) ProtoMessage() {}
+
+func (x *HistoryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HistoryRequest.ProtoReflect.Descriptor instead.
+func (*HistoryRequest) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HistoryRequest) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+// The board as of seq, limited to the client's viewport.
+type History struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Seq   uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	// When the batch at seq was made (0 if unknown).
+	WallMs        int64          `protobuf:"varint,2,opt,name=wall_ms,json=wallMs,proto3" json:"wall_ms,omitempty"`
+	Objects       []*ObjectState `protobuf:"bytes,3,rep,name=objects,proto3" json:"objects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *History) Reset() {
+	*x = History{}
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *History) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*History) ProtoMessage() {}
+
+func (x *History) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use History.ProtoReflect.Descriptor instead.
+func (*History) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *History) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *History) GetWallMs() int64 {
+	if x != nil {
+		return x.WallMs
+	}
+	return 0
+}
+
+func (x *History) GetObjects() []*ObjectState {
+	if x != nil {
+		return x.Objects
+	}
+	return nil
+}
+
+// Makes the board look as it did at seq. The server appends the difference
+// as one new batch, so history stays append-only and a restore can itself
+// be undone by restoring again.
+type RestoreRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreRequest) Reset() {
+	*x = RestoreRequest{}
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreRequest) ProtoMessage() {}
+
+func (x *RestoreRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreRequest.ProtoReflect.Descriptor instead.
+func (*RestoreRequest) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *RestoreRequest) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
 var File_whiteboard_v1_protocol_proto protoreflect.FileDescriptor
 
 const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\n" +
-	"\x1cwhiteboard/v1/protocol.proto\x12\rwhiteboard.v1\"\x99\x02\n" +
+	"\x1cwhiteboard/v1/protocol.proto\x12\rwhiteboard.v1\"\x8f\x03\n" +
 	"\rClientMessage\x12,\n" +
 	"\x05hello\x18\x01 \x01(\v2\x14.whiteboard.v1.HelloH\x00R\x05hello\x126\n" +
 	"\ttime_ping\x18\x02 \x01(\v2\x17.whiteboard.v1.TimePingH\x00R\btimePing\x123\n" +
 	"\bop_batch\x18\x03 \x01(\v2\x16.whiteboard.v1.OpBatchH\x00R\aopBatch\x12/\n" +
 	"\x06cursor\x18\x04 \x01(\v2\x15.whiteboard.v1.CursorH\x00R\x06cursor\x125\n" +
-	"\bviewport\x18\x05 \x01(\v2\x17.whiteboard.v1.ViewportH\x00R\bviewportB\x05\n" +
-	"\x03msg\"\xe4\x01\n" +
+	"\bviewport\x18\x05 \x01(\v2\x17.whiteboard.v1.ViewportH\x00R\bviewport\x129\n" +
+	"\ahistory\x18\x06 \x01(\v2\x1d.whiteboard.v1.HistoryRequestH\x00R\ahistory\x129\n" +
+	"\arestore\x18\a \x01(\v2\x1d.whiteboard.v1.RestoreRequestH\x00R\arestoreB\x05\n" +
+	"\x03msg\"\x98\x02\n" +
 	"\rServerMessage\x122\n" +
 	"\awelcome\x18\x01 \x01(\v2\x16.whiteboard.v1.WelcomeH\x00R\awelcome\x126\n" +
 	"\ttime_pong\x18\x02 \x01(\v2\x17.whiteboard.v1.TimePongH\x00R\btimePong\x122\n" +
 	"\x05error\x18\x03 \x01(\v2\x1a.whiteboard.v1.ServerErrorH\x00R\x05error\x12,\n" +
-	"\x05frame\x18\x04 \x01(\v2\x14.whiteboard.v1.FrameH\x00R\x05frameB\x05\n" +
+	"\x05frame\x18\x04 \x01(\v2\x14.whiteboard.v1.FrameH\x00R\x05frame\x122\n" +
+	"\ahistory\x18\x05 \x01(\v2\x16.whiteboard.v1.HistoryH\x00R\ahistoryB\x05\n" +
 	"\x03msg\"\x9f\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x19\n" +
@@ -1788,7 +1993,15 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\vFieldStamps\x12*\n" +
 	"\x05stamp\x18\x01 \x01(\v2\x14.whiteboard.v1.StampR\x05stamp\x12\x1d\n" +
 	"\n" +
-	"field_mask\x18\x02 \x01(\rR\tfieldMask*\x88\x01\n" +
+	"field_mask\x18\x02 \x01(\rR\tfieldMask\"\"\n" +
+	"\x0eHistoryRequest\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"j\n" +
+	"\aHistory\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x17\n" +
+	"\awall_ms\x18\x02 \x01(\x03R\x06wallMs\x124\n" +
+	"\aobjects\x18\x03 \x03(\v2\x1a.whiteboard.v1.ObjectStateR\aobjects\"\"\n" +
+	"\x0eRestoreRequest\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq*\x88\x01\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ERROR_CODE_BAD_REQUEST\x10\x01\x12\"\n" +
@@ -1817,7 +2030,7 @@ func file_whiteboard_v1_protocol_proto_rawDescGZIP() []byte {
 }
 
 var file_whiteboard_v1_protocol_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_whiteboard_v1_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_whiteboard_v1_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_whiteboard_v1_protocol_proto_goTypes = []any{
 	(ErrorCode)(0),         // 0: whiteboard.v1.ErrorCode
 	(ShapeType)(0),         // 1: whiteboard.v1.ShapeType
@@ -1841,6 +2054,9 @@ var file_whiteboard_v1_protocol_proto_goTypes = []any{
 	(*CursorUpdate)(nil),   // 19: whiteboard.v1.CursorUpdate
 	(*ObjectState)(nil),    // 20: whiteboard.v1.ObjectState
 	(*FieldStamps)(nil),    // 21: whiteboard.v1.FieldStamps
+	(*HistoryRequest)(nil), // 22: whiteboard.v1.HistoryRequest
+	(*History)(nil),        // 23: whiteboard.v1.History
+	(*RestoreRequest)(nil), // 24: whiteboard.v1.RestoreRequest
 }
 var file_whiteboard_v1_protocol_proto_depIdxs = []int32{
 	4,  // 0: whiteboard.v1.ClientMessage.hello:type_name -> whiteboard.v1.Hello
@@ -1848,34 +2064,38 @@ var file_whiteboard_v1_protocol_proto_depIdxs = []int32{
 	13, // 2: whiteboard.v1.ClientMessage.op_batch:type_name -> whiteboard.v1.OpBatch
 	18, // 3: whiteboard.v1.ClientMessage.cursor:type_name -> whiteboard.v1.Cursor
 	17, // 4: whiteboard.v1.ClientMessage.viewport:type_name -> whiteboard.v1.Viewport
-	5,  // 5: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
-	7,  // 6: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
-	8,  // 7: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
-	16, // 8: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
-	17, // 9: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
-	20, // 10: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
-	0,  // 11: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
-	1,  // 12: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
-	11, // 13: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
-	11, // 14: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
-	10, // 15: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
-	9,  // 16: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
-	12, // 17: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
-	9,  // 18: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
-	12, // 19: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
-	9,  // 20: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
-	14, // 21: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
-	15, // 22: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
-	19, // 23: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
-	20, // 24: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
-	10, // 25: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
-	21, // 26: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
-	9,  // 27: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	22, // 5: whiteboard.v1.ClientMessage.history:type_name -> whiteboard.v1.HistoryRequest
+	24, // 6: whiteboard.v1.ClientMessage.restore:type_name -> whiteboard.v1.RestoreRequest
+	5,  // 7: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
+	7,  // 8: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
+	8,  // 9: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
+	16, // 10: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
+	23, // 11: whiteboard.v1.ServerMessage.history:type_name -> whiteboard.v1.History
+	17, // 12: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
+	20, // 13: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
+	0,  // 14: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
+	1,  // 15: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
+	11, // 16: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
+	11, // 17: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
+	10, // 18: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
+	9,  // 19: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
+	12, // 20: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
+	9,  // 21: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
+	12, // 22: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
+	9,  // 23: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
+	14, // 24: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
+	15, // 25: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
+	19, // 26: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
+	20, // 27: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
+	10, // 28: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
+	21, // 29: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
+	9,  // 30: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
+	20, // 31: whiteboard.v1.History.objects:type_name -> whiteboard.v1.ObjectState
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_whiteboard_v1_protocol_proto_init() }
@@ -1889,12 +2109,15 @@ func file_whiteboard_v1_protocol_proto_init() {
 		(*ClientMessage_OpBatch)(nil),
 		(*ClientMessage_Cursor)(nil),
 		(*ClientMessage_Viewport)(nil),
+		(*ClientMessage_History)(nil),
+		(*ClientMessage_Restore)(nil),
 	}
 	file_whiteboard_v1_protocol_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_TimePong)(nil),
 		(*ServerMessage_Error)(nil),
 		(*ServerMessage_Frame)(nil),
+		(*ServerMessage_History)(nil),
 	}
 	file_whiteboard_v1_protocol_proto_msgTypes[8].OneofWrappers = []any{}
 	file_whiteboard_v1_protocol_proto_msgTypes[14].OneofWrappers = []any{}
@@ -1904,7 +2127,7 @@ func file_whiteboard_v1_protocol_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_whiteboard_v1_protocol_proto_rawDesc), len(file_whiteboard_v1_protocol_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   20,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

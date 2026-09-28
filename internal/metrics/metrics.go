@@ -32,6 +32,8 @@ type Metrics struct {
 	BoardFailures *prometheus.CounterVec
 	// FanoutBytes counts frame bytes queued to clients.
 	FanoutBytes prometheus.Counter
+	// Restores counts point-in-time restores applied.
+	Restores prometheus.Counter
 	// SyncServerLatency is from a batch arriving until its frames are queued
 	// (includes waiting for the tick and the commit).
 	SyncServerLatency prometheus.Histogram
@@ -105,6 +107,10 @@ func New() *Metrics {
 			Name: "fanout_bytes_total",
 			Help: "Frame bytes queued to clients.",
 		}),
+		Restores: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "board_restores_total",
+			Help: "Point-in-time restores applied.",
+		}),
 		SyncServerLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Name:    "sync_server_latency_seconds",
 			Help:    "From a batch arriving until its frames are queued to other clients.",
@@ -119,7 +125,7 @@ func New() *Metrics {
 		m.ClientsKicked, m.TickDuration,
 		m.CommitDuration, m.BoardLoadDuration, m.SnapshotDuration,
 		m.SnapshotsWritten, m.SnapshotFailures, m.BoardFailures,
-		m.FanoutBytes, m.SyncServerLatency,
+		m.FanoutBytes, m.SyncServerLatency, m.Restores,
 	)
 	return m
 }

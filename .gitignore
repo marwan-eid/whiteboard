@@ -7,3 +7,4 @@ web/playwright-report/
 coverage/
 .env
 web/perf-results.json
+**/testdata/rapid/

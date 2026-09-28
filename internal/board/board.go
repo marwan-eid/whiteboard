@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -147,6 +148,10 @@ type Board struct {
 	workers         []*frameWorker
 	targets         []target
 
+	// History reads committed state on callers' goroutines.
+	hist         *historian
+	committedSeq atomic.Uint64
+
 	// Written by connection goroutines, drained by the actor each tick.
 	cursorMu    sync.Mutex
 	cursorMoved map[uint64][2]float64
@@ -208,6 +213,7 @@ func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClo
 		cursorIDs:      map[string]uint64{},
 		cursorMoved:    map[uint64][2]float64{},
 		presenceMoved:  map[uint64]bool{},
+		hist:           newHistorian(cfg.Store, id),
 	}
 	go b.run()
 	return b
@@ -390,6 +396,7 @@ func (b *Board) load() error {
 		}
 		return true
 	})
+	b.committedSeq.Store(b.seq)
 	b.metrics.BoardLoadDuration.Observe(time.Since(start).Seconds())
 	b.log.Info("board loaded", "seq", b.seq, "objects", b.doc.Len(), "replayed", len(loaded.Tail), "took", time.Since(start))
 	return nil
@@ -423,6 +430,9 @@ func (b *Board) handle(m any) {
 		}
 	case snapshotMsg:
 		m.reply <- Snapshot{Seq: b.seq, Objects: b.doc.Snapshot()}
+	case restoreMsg:
+		b.applyRestore(m.past)
+		m.reply <- nil
 	}
 }
 
@@ -479,9 +489,15 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 	}
 	b.clock.Observe(st)
 
-	// Record each object's box before and after its op; flush uses them to
-	// decide who gets the op, the whole object, or nothing.
-	ops := batch.GetOps()
+	b.applyOps(clientID, cs, batch.GetOps(), st, received)
+	b.metrics.BatchesApplied.Inc()
+	b.ack(clientID, &pb.Ack{ClientSeq: cs, Seq: b.seq, Stamp: st.Proto()})
+}
+
+// applyOps merges a batch, assigns it the next seq and queues it for commit.
+// It records each object's box before and after its op; flush uses them to
+// decide who gets the op, the whole object, or nothing.
+func (b *Board) applyOps(clientID, clientSeq uint64, ops []*pb.Op, st hlc.Stamp, received time.Time) {
 	p := pending{before: make([]rectOK, len(ops)), after: make([]rectOK, len(ops)), received: received}
 	for i, op := range ops {
 		id := op.GetId()
@@ -497,10 +513,8 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 		}
 	}
 	b.seq++
-	b.metrics.BatchesApplied.Inc()
-	p.entry = LogEntry{Seq: b.seq, ClientID: clientID, ClientSeq: cs, Stamp: st.Proto(), Ops: ops}
+	p.entry = LogEntry{Seq: b.seq, ClientID: clientID, ClientSeq: clientSeq, Stamp: st.Proto(), Ops: ops}
 	b.uncommitted = append(b.uncommitted, p)
-	b.ack(clientID, &pb.Ack{ClientSeq: cs, Seq: b.seq, Stamp: st.Proto()})
 }
 
 func (b *Board) reject(clientID, clientSeq uint64, reason string) {
@@ -534,6 +548,7 @@ func (b *Board) flush() error {
 		if err != nil {
 			return err
 		}
+		b.committedSeq.Store(b.seq)
 		batches = make([]encodedBatch, len(b.uncommitted))
 		for i, p := range b.uncommitted {
 			batches[i] = encodeBatch(p.entry, p.before, p.after)

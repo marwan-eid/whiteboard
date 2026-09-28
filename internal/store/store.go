@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -126,6 +127,7 @@ func (s *Postgres) SaveSnapshot(ctx context.Context, boardID string, snap *pb.Bo
 const segmentSize = 10_000
 
 func (s *Postgres) Range(ctx context.Context, boardID string, from, to uint64) ([]board.LogEntry, error) {
+	to = min(to, math.MaxInt64) // seqs are bigint; a larger bound would wrap negative
 	var out []board.LogEntry
 	rows, err := s.pool.Query(ctx,
 		"SELECT data FROM op_segments WHERE board_id = $1 AND to_seq > $2 AND from_seq <= $3 ORDER BY from_seq",

@@ -67,6 +67,8 @@ type Client struct {
 	// Frame.leave). The replica can also contain objects with pending local
 	// edits that are not held; they are dropped once acked.
 	held map[string]bool
+	// histories delivers History replies (see HistoryAt).
+	histories chan *pb.History
 }
 
 func New(cfg Config) *Client {
@@ -85,6 +87,7 @@ func New(cfg Config) *Client {
 		welcomed:      make(chan struct{}),
 		cursors:       map[uint64][2]float64{},
 		held:          map[string]bool{},
+		histories:     make(chan *pb.History, 16),
 	}
 }
 
@@ -252,6 +255,11 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 		case *pb.ServerMessage_Frame:
 			if c.onFrame(ws, m.Frame) && c.cfg.OnFrame != nil {
 				c.cfg.OnFrame(m.Frame)
+			}
+		case *pb.ServerMessage_History:
+			select {
+			case c.histories <- m.History:
+			default: // nobody is waiting; drop it
 			}
 		case *pb.ServerMessage_Error:
 			ws.CloseNow()
@@ -575,4 +583,35 @@ func (c *Client) pendingIDs() map[string]bool {
 		}
 	}
 	return busy
+}
+
+// HistoryAt asks for the board as of seq and waits for the reply.
+func (c *Client) HistoryAt(ctx context.Context, seq uint64) (*pb.History, error) {
+	if err := c.sendMessage(ctx, &pb.ClientMessage{Msg: &pb.ClientMessage_History{History: &pb.HistoryRequest{Seq: seq}}}); err != nil {
+		return nil, err
+	}
+	for {
+		select {
+		case h := <-c.histories:
+			if h.GetSeq() == seq || seq > h.GetSeq() { // capped at the latest committed seq
+				return h, nil
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// Restore asks the server to make the board look as it did at seq.
+func (c *Client) Restore(ctx context.Context, seq uint64) error {
+	return c.sendMessage(ctx, &pb.ClientMessage{Msg: &pb.ClientMessage_Restore{Restore: &pb.RestoreRequest{Seq: seq}}})
+}
+
+func (c *Client) sendMessage(ctx context.Context, msg *pb.ClientMessage) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.conn == nil || !c.isWelcomed() {
+		return ErrOffline
+	}
+	return write(ctx, c.conn, msg)
 }

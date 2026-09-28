@@ -282,3 +282,54 @@ func TestMergeStateRebuildsReplica(t *testing.T) {
 		}
 	})
 }
+
+// visibleProps is a document's visible objects and their properties.
+func visibleProps(d *Doc) map[string]*pb.ObjectProps {
+	out := map[string]*pb.ObjectProps{}
+	for id, o := range d.objects {
+		if o.Visible() {
+			p := proto.CloneOf(o.Props)
+			p.Deleted = nil // false or unset look the same
+			out[id] = p
+		}
+	}
+	return out
+}
+
+// Applying Diff(now, past) with a newer stamp makes the present look like the past.
+func TestDiffRestoresVisibleState(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		batches := drawBatches(t)
+		order := indexes(len(batches))
+		cut := rapid.IntRange(0, len(order)).Draw(t, "cut")
+		past := New()
+		applyAll(past, batches, order[:cut])
+		now := past.Clone()
+		applyAll(now, batches, order[cut:])
+
+		now.ApplyBatch(Diff(now, past), hlc.Stamp{WallMs: 1 << 40})
+		got, want := visibleProps(now), visibleProps(past)
+		if len(got) != len(want) {
+			t.Fatalf("visible objects: got %d, want %d", len(got), len(want))
+		}
+		for id, p := range want {
+			g := got[id]
+			if g == nil {
+				t.Fatalf("%s missing after restore", id)
+			}
+			// Fields the past had must match. Fields first set later cannot be
+			// unset (text is cleared to ""), so they are not compared.
+			if p.Text == nil && g.GetText() != "" {
+				t.Fatalf("%s: text %q not cleared", id, g.GetText())
+			}
+			pm, gm := p.ProtoReflect(), g.ProtoReflect()
+			pm.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+				// The generator may change type, which the server never allows.
+				if fd.Name() != "type" && !gm.Get(fd).Equal(v) {
+					t.Fatalf("%s.%s = %v, want %v", id, fd.Name(), gm.Get(fd), v)
+				}
+				return true
+			})
+		}
+	})
+}
