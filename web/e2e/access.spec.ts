@@ -18,9 +18,11 @@ async function guest(browser: Browser, url: string): Promise<Page> {
 
 async function createLink(owner: Page, role: "view" | "edit"): Promise<string> {
   await owner.getByRole("button", { name: `Create ${role} link` }).click();
-  const input = owner.getByTestId("share-url");
-  await expect(input).toHaveValue(/#k=/);
-  return input.inputValue();
+  // The box may still show an earlier link: wait for this one's label, set together with its URL.
+  await expect(owner.getByText(`New ${role === "view" ? "viewer" : "editor"} link`)).toBeVisible();
+  const url = await owner.getByTestId("share-url").inputValue();
+  expect(url).toMatch(/#k=/);
+  return url;
 }
 
 test("private boards: owner, strangers, view and edit links, revocation", async ({ browser }) => {
@@ -59,6 +61,7 @@ test("private boards: owner, strangers, view and edit links, revocation", async 
   const editUrl = await createLink(owner, "edit");
   const editor = await guest(browser, editUrl);
   await connected(editor);
+  await expect(editor.getByTestId("view-only")).toHaveCount(0);
   await editor.mouse.dblclick(700, 250);
   await expect.poll(async () => (await visible(owner)).length).toBe(2);
 
