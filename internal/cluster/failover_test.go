@@ -81,7 +81,7 @@ func startCluster(t *testing.T, ids ...string) *cluster2 {
 	for _, id := range ids {
 		n := &testNode{id: id, metrics: metrics.New()}
 		n.cluster = cluster.New(cluster.Config{
-			NodeID: id, Heartbeat: 100 * time.Millisecond, LiveFor: 300 * time.Millisecond, LeaseTTL: 600 * time.Millisecond,
+			NodeID: id, Heartbeat: 100 * time.Millisecond, LiveFor: time.Second, LeaseTTL: time.Second,
 		}, pool, log)
 		if err := n.cluster.Join(ctx); err != nil {
 			t.Fatal(err)
@@ -281,7 +281,7 @@ func TestKilledOwnerFailsOver(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Logf("all clients back %v after the kill (lease TTL 600 ms)", time.Since(killedAt).Round(10*time.Millisecond))
+	t.Logf("all clients back %v after the kill (lease TTL 1 s)", time.Since(killedAt).Round(10*time.Millisecond))
 	time.Sleep(500 * time.Millisecond)
 	close(stop)
 	wg.Wait()
@@ -314,8 +314,8 @@ func TestPausedOwnerStepsDown(t *testing.T) {
 	wg := edit(clients, stop)
 
 	time.Sleep(300 * time.Millisecond)
-	owner.stopLeases()                 // still serving its clients, but no longer heartbeating or renewing
-	time.Sleep(800 * time.Millisecond) // lease (600 ms) and liveness (300 ms) run out
+	owner.stopLeases()                  // still serving its clients, but no longer heartbeating or renewing
+	time.Sleep(1500 * time.Millisecond) // lease and liveness (1 s each) run out
 
 	// A client reaching the other node now gets the board there.
 	late := client.New(client.Config{URL: other.wsURL(), BoardID: boardID, Reconnect: true,

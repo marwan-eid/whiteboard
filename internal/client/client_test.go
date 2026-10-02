@@ -56,7 +56,7 @@ func startServerWith(t *testing.T, st board.Store) *server {
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	m := metrics.New()
-	boards := board.NewRegistry(board.Config{NodeID: "n1", Store: st, Tick: 5 * time.Millisecond, SnapshotEvery: 50}, log, m)
+	boards := board.NewRegistry(board.Config{NodeID: "n1", Store: st, Tick: 5 * time.Millisecond, SnapshotEvery: 50, SnapshotMinInterval: -1}, log, m)
 	srv := httptest.NewServer(gateway.New(gateway.Config{}, boards, log, m))
 	t.Cleanup(srv.Close)
 	return &server{url: "ws" + strings.TrimPrefix(srv.URL, "http"), boards: boards, metrics: m}
