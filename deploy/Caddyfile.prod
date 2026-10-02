@@ -1,0 +1,43 @@
+# Production: deploy/Caddyfile plus Grafana. Keep the two in step.
+{
+	admin off
+}
+
+# SITE_ADDRESS defaults to plain HTTP on :80. Set it to a domain name
+# (e.g. board.example.com) and publish ports 80/443 to get automatic HTTPS.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# One node, by name: clients connect to the node serving their board
+	# (GET /api/boards/{id}/route). The node checks its lease and answers
+	# Moved if the board lives elsewhere.
+	handle /n/node-1/* {
+		reverse_proxy node-1:8081
+	}
+	handle /n/node-2/* {
+		reverse_proxy node-2:8081
+	}
+
+	# Read-only dashboards (deploy/compose.prod.yaml).
+	handle /grafana* {
+		reverse_proxy grafana:3000
+	}
+
+	# Any live node: a dead one is skipped (and retried for 5 s), so routing
+	# and the API keep working while a node is down.
+	@node path /ws /api/* /healthz /readyz
+	handle @node {
+		reverse_proxy node-1:8081 node-2:8081 {
+			lb_policy round_robin
+			lb_try_duration 5s
+			fail_duration 10s
+		}
+	}
+
+	handle {
+		root * /srv
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

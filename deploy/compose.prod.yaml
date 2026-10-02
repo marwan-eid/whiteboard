@@ -1,0 +1,90 @@
+# The public deployment (docs/DEPLOY.md): the self-host stack (compose.yaml)
+# plus published images, TLS on 80/443, Prometheus, Grafana and nightly
+# backups. Settings come from .env next to compose.yaml (see deploy/.env.example):
+#   docker compose -f compose.yaml -f deploy/compose.prod.yaml up -d
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command: ["postgres", "-c", "shared_buffers=1GB", "-c", "effective_cache_size=4GB"]
+
+  node-1:
+    build: !reset null
+    image: ghcr.io/marwan-eid/whiteboard-node:${IMAGE_TAG:-latest}
+    environment:
+      SECRET: ${SECRET:?set SECRET in .env}
+  node-2:
+    build: !reset null
+    image: ghcr.io/marwan-eid/whiteboard-node:${IMAGE_TAG:-latest}
+    environment:
+      SECRET: ${SECRET:?set SECRET in .env}
+
+  web:
+    build: !reset null
+    image: ghcr.io/marwan-eid/whiteboard-web:${IMAGE_TAG:-latest}
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS (the domain) in .env}
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    restart: unless-stopped
+
+  # Served at /grafana/. Anyone may look (read-only); changes need the admin password.
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    environment:
+      GF_SERVER_ROOT_URL: https://${SITE_ADDRESS}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # Nightly pg_dump, kept locally (the last 7) and uploaded to OCI Object
+  # Storage through a pre-authenticated request URL if BACKUP_UPLOAD_URL is set.
+  backup:
+    image: postgres:17-alpine
+    entrypoint: ["/bin/sh", "/backup/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: whiteboard
+      PGDATABASE: whiteboard
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      BACKUP_UPLOAD_URL: ${BACKUP_UPLOAD_URL:-}
+      BACKUP_AT: ${BACKUP_AT:-03:00}
+    volumes:
+      - ./deploy/backup:/backup:ro
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+  prometheus:
+  grafana:
+  backups:

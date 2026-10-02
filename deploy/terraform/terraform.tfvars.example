@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. See docs/DEPLOY.md.
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+fingerprint      = "12:34:56:..."
+private_key_path = "C:/Users/you/.oci/whiteboard_api_key.pem"
+region           = "eu-frankfurt-1" # your home region
+
+ssh_public_key_path = "C:/Users/you/.ssh/whiteboard_oci.pub"
+# admin_cidr = "203.0.113.7/32"     # limit SSH to your address
+
+# Optional: a DuckDNS name instead of <ip>.sslip.io
+# site_address  = "my-whiteboard.duckdns.org"
+# duckdns_token = "..."
+
+# ocpus = 3      # Always Free A1: 4 OCPU / 24 GB per account in total
+# memory_gb = 18
