@@ -3,6 +3,8 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -178,5 +180,64 @@ func TestCompactionKeepsHistory(t *testing.T) {
 	}
 	if snap, _ := s.SnapshotAtOrBefore(ctx, "c", 24); snap.GetSeq() != 20 {
 		t.Fatalf("snapshot at or before 24 = %d, want 20", snap.GetSeq())
+	}
+}
+
+// Compactions racing each other (a crashed board's and its reload's) and a
+// reader racing both: every entry is read exactly once, every time.
+func TestConcurrentCompactionAndRange(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if _, err := s.Load(ctx, "r"); err != nil {
+		t.Fatal(err)
+	}
+	const n = 2000
+	for i := uint64(1); i <= n; i += 100 {
+		var batch []board.LogEntry
+		for j := i; j < i+100; j++ {
+			batch = append(batch, entry(j, 10, j, float64(j)))
+		}
+		if err := s.Append(ctx, "r", batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveSnapshot(ctx, "r", &pb.BoardSnapshot{Seq: n}); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for range 3 {
+		wg.Go(func() {
+			if _, err := s.Compact(ctx, "r", n); err != nil {
+				errs <- err
+			}
+		})
+	}
+	wg.Go(func() {
+		for range 20 {
+			got, err := s.Range(ctx, "r", 0, n)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if len(got) != n {
+				errs <- fmt.Errorf("range read %d entries during compaction, want %d", len(got), n)
+				return
+			}
+		}
+	})
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	got, err := s.Range(ctx, "r", 0, n)
+	if err != nil || len(got) != n {
+		t.Fatalf("after: %d entries, %v", len(got), err)
+	}
+	for i, e := range got {
+		if e.Seq != uint64(i+1) {
+			t.Fatalf("entry %d has seq %d: duplicated or missing", i, e.Seq)
+		}
 	}
 }

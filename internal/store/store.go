@@ -43,12 +43,20 @@ func (s *Postgres) Load(ctx context.Context, boardID string) (board.Loaded, erro
 	if _, err := s.pool.Exec(ctx, "INSERT INTO boards (id) VALUES ($1) ON CONFLICT DO NOTHING", boardID); err != nil {
 		return l, fmt.Errorf("ensure board: %w", err)
 	}
+	// The snapshot and the tail after it are read in one snapshot of the
+	// database: a snapshot plus compaction committing between two separate
+	// reads would leave entries in neither.
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return l, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var (
 		snapSeq int64
 		data    []byte
 	)
-	err := s.pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		"SELECT seq, data FROM snapshots WHERE board_id = $1 ORDER BY seq DESC LIMIT 1", boardID,
 	).Scan(&snapSeq, &data)
 	switch {
@@ -66,7 +74,7 @@ func (s *Postgres) Load(ctx context.Context, boardID string) (board.Loaded, erro
 		}
 	}
 
-	rows, err := s.pool.Query(ctx,
+	rows, err := tx.Query(ctx,
 		"SELECT seq, client_id, client_seq, batch FROM ops WHERE board_id = $1 AND seq > $2 ORDER BY seq", boardID, snapSeq)
 	if err != nil {
 		return l, fmt.Errorf("read log: %w", err)
@@ -126,10 +134,18 @@ func (s *Postgres) SaveSnapshot(ctx context.Context, boardID string, snap *pb.Bo
 // reading a little history never means decompressing a huge blob.
 const segmentSize = 10_000
 
+// Range reads segments and live rows in one repeatable-read transaction: a
+// compaction committing between two separate reads would move entries out of
+// the rows after the segments were read, and they would be seen in neither.
 func (s *Postgres) Range(ctx context.Context, boardID string, from, to uint64) ([]board.LogEntry, error) {
 	to = min(to, math.MaxInt64) // seqs are bigint; a larger bound would wrap negative
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	var out []board.LogEntry
-	rows, err := s.pool.Query(ctx,
+	rows, err := tx.Query(ctx,
 		"SELECT data FROM op_segments WHERE board_id = $1 AND to_seq > $2 AND from_seq <= $3 ORDER BY from_seq",
 		boardID, int64(from), int64(to))
 	if err != nil {
@@ -161,15 +177,15 @@ func (s *Postgres) Range(ctx context.Context, boardID string, from, to uint64) (
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	live, err := s.opsRange(ctx, boardID, from, to)
+	live, err := opsRange(ctx, tx, boardID, from, to)
 	if err != nil {
 		return nil, err
 	}
-	return append(out, live...), nil
+	return append(out, live...), tx.Commit(ctx)
 }
 
-func (s *Postgres) opsRange(ctx context.Context, boardID string, from, to uint64) ([]board.LogEntry, error) {
-	rows, err := s.pool.Query(ctx,
+func opsRange(ctx context.Context, tx pgx.Tx, boardID string, from, to uint64) ([]board.LogEntry, error) {
+	rows, err := tx.Query(ctx,
 		"SELECT seq, client_id, client_seq, batch FROM ops WHERE board_id = $1 AND seq > $2 AND seq <= $3 ORDER BY seq",
 		boardID, int64(from), int64(to))
 	if err != nil {
@@ -234,7 +250,10 @@ func (s *Postgres) compactOne(ctx context.Context, boardID string, upTo uint64) 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx,
-		"SELECT seq, client_id, client_seq, batch FROM ops WHERE board_id = $1 AND seq <= $2 ORDER BY seq LIMIT $3",
+		// FOR UPDATE: a crashed board's compaction can still be running when the
+		// reloaded board starts its own; the second waits instead of writing the
+		// same entries into a second segment.
+		"SELECT seq, client_id, client_seq, batch FROM ops WHERE board_id = $1 AND seq <= $2 ORDER BY seq LIMIT $3 FOR UPDATE",
 		boardID, int64(upTo), segmentSize)
 	if err != nil {
 		return 0, err

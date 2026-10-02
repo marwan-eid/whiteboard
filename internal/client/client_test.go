@@ -248,7 +248,16 @@ func TestRandomizedConvergenceWithCrashesPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	forSeeds(t, 2, func(t *testing.T, seed uint64) {
-		if _, err := pool.Exec(context.Background(), "DELETE FROM ops; DELETE FROM op_segments; DELETE FROM snapshots; DELETE FROM boards"); err != nil {
+		// A previous seed's crashed board may still be compacting; retry if
+		// the cleanup deadlocks with it.
+		var err error
+		for range 10 {
+			if _, err = pool.Exec(context.Background(), "DELETE FROM ops; DELETE FROM op_segments; DELETE FROM snapshots; DELETE FROM boards"); err == nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		st, err := store.NewPostgres(pool)
