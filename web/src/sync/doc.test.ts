@@ -122,7 +122,8 @@ describe("Doc properties", () => {
                 if (k === "$typeName" || v === undefined) continue;
                 const key = `${op.id}.${k}`;
                 const w = winner.get(key);
-                if (!w || compareStamps(b.stamp, w.stamp) > 0) winner.set(key, { stamp: b.stamp, value: v });
+                // ">=": within one batch (one stamp), the later write wins.
+                if (!w || compareStamps(b.stamp, w.stamp) >= 0) winner.set(key, { stamp: b.stamp, value: v });
               }
             }
           }

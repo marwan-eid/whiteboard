@@ -110,14 +110,56 @@ func (d *Doc) Apply(op *pb.Op, st hlc.Stamp) bool {
 	return o.merge(props, st)
 }
 
-// ApplyBatch applies every op with the batch stamp.
+// ApplyBatch applies every op with the batch stamp, after Coalesce.
 func (d *Doc) ApplyBatch(ops []*pb.Op, st hlc.Stamp) (changed bool) {
-	for _, op := range ops {
+	for _, op := range Coalesce(ops) {
 		if d.Apply(op, st) {
 			changed = true
 		}
 	}
 	return changed
+}
+
+// Coalesce merges ops on the same object into one, at the position of its
+// first op, with later ops' properties replacing earlier ones: a batch means
+// "do these in order". Every op in a batch has the batch's stamp, so without
+// this two writes to one property would tie, and replicas that saw different
+// parts of the batch (a delta here, the whole object there) could keep
+// different values under the same stamp. It returns ops itself when no id
+// repeats.
+func Coalesce(ops []*pb.Op) []*pb.Op {
+	seen := make(map[string]int, len(ops))
+	dup := false
+	for _, op := range ops {
+		if _, ok := seen[op.GetId()]; ok {
+			dup = true
+			break
+		}
+		seen[op.GetId()] = 0
+	}
+	if !dup {
+		return ops
+	}
+	out := make([]*pb.Op, 0, len(ops))
+	at := make(map[string]int, len(ops))
+	for _, op := range ops {
+		props := proto.CloneOf(op.GetProps())
+		if props == nil {
+			props = &pb.ObjectProps{}
+		}
+		i, ok := at[op.GetId()]
+		if !ok {
+			at[op.GetId()] = len(out)
+			out = append(out, &pb.Op{Id: op.GetId(), Props: props})
+			continue
+		}
+		dst := out[i].Props.ProtoReflect()
+		props.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+			dst.Set(fd, v) // whole values: a later unbind replaces a binding
+			return true
+		})
+	}
+	return out
 }
 
 // MergeState merges an object's state (as from Object.State, possibly

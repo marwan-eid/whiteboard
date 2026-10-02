@@ -37,6 +37,32 @@ export function isVisible(o: DocObject): boolean {
   return o.props.type !== undefined && o.props.deleted !== true;
 }
 
+/**
+ * Merges ops on the same object into one, at the position of its first op, with
+ * later ops' properties replacing earlier ones. Every op in a batch has the
+ * batch's stamp, so without this two writes to one property would tie and
+ * replicas could keep different values. Mirrors doc.Coalesce (Go).
+ */
+export function coalesce(ops: readonly Op[]): readonly Op[] {
+  if (new Set(ops.map((o) => o.id)).size === ops.length) return ops;
+  const out: Op[] = [];
+  const at = new Map<string, Op>();
+  for (const op of ops) {
+    const merged = at.get(op.id);
+    if (!merged) {
+      const copy = create(OpSchema, { id: op.id, props: op.props ? clone(ObjectPropsSchema, op.props) : {} });
+      at.set(op.id, copy);
+      out.push(copy);
+      continue;
+    }
+    if (!op.props) continue;
+    for (const f of FIELDS) {
+      if (isFieldSet(op.props, f)) (merged.props as unknown as PropRecord)[f.localName] = (op.props as unknown as PropRecord)[f.localName];
+    }
+  }
+  return out;
+}
+
 export class Doc {
   private readonly objects = new Map<string, DocObject>();
 
@@ -73,10 +99,10 @@ export class Doc {
     return changed;
   }
 
-  /** Applies every op with the batch stamp; returns the ids that changed. */
+  /** Applies every op with the batch stamp, after coalesce; returns the ids that changed. */
   applyBatch(ops: readonly Op[], st: Stamp): Set<string> {
     const changed = new Set<string>();
-    for (const op of ops) {
+    for (const op of coalesce(ops)) {
       if (this.apply(op, st)) changed.add(op.id);
     }
     return changed;

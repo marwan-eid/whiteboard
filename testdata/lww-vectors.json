@@ -2,6 +2,23 @@
   "comment": "Merge vectors shared by internal/doc (Go) and web/src/sync/doc.ts. Each case's batches are applied in every order (with duplicates); every order must produce `expected` exactly: same values, same per-field stamps, grouped by stamp ascending. Proto3 JSON. Field numbers for masks: type=1 deleted=2 x=3 y=4 w=5 h=6 z=7 fill=8 stroke=9 strokeWidth=10 text=11 points=12 from=13 to=14 fontSize=15.",
   "cases": [
     {
+      "name": "within one batch, a later op on the same object wins (the batch has one stamp, so the ops are merged first)",
+      "batches": [
+        { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 0 } }] },
+        { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "deleted": true } }, { "id": "1:a", "props": { "deleted": false, "x": 5 } }] }
+      ],
+      "expected": [
+        {
+          "id": "1:a",
+          "props": { "type": "SHAPE_TYPE_RECT", "deleted": false, "x": 5 },
+          "stamps": [
+            { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "fieldMask": 2 },
+            { "stamp": { "wallMs": 200, "counter": 0, "clientId": 1 }, "fieldMask": 12 }
+          ]
+        }
+      ]
+    },
+    {
       "name": "later write wins",
       "batches": [
         { "stamp": { "wallMs": 100, "counter": 0, "clientId": 1 }, "ops": [{ "id": "1:a", "props": { "type": "SHAPE_TYPE_RECT", "x": 0, "y": 0, "w": 10, "h": 10 } }] },

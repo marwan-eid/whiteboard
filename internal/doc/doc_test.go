@@ -175,7 +175,8 @@ func TestConvergesRegardlessOfOrderAndDuplicates(t *testing.T) {
 	})
 }
 
-// Each field ends up with the value from the highest-stamped write to it.
+// Each field ends up with the value from the highest-stamped write to it; within
+// one batch (one stamp), the later write.
 func TestMatchesLastWriterWinsModel(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		batches := drawBatches(t)
@@ -192,7 +193,7 @@ func TestMatchesLastWriterWinsModel(t *testing.T) {
 			for _, op := range b.ops {
 				op.GetProps().ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 					k := key{op.GetId(), int(fd.Number())}
-					if w, ok := winner[k]; !ok || b.stamp.Compare(w) > 0 {
+					if w, ok := winner[k]; !ok || b.stamp.Compare(w) >= 0 {
 						winner[k], value[k] = b.stamp, v.Interface()
 					}
 					return true

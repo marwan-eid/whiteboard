@@ -514,7 +514,8 @@ func (b *Board) apply(clientID uint64, batch *pb.OpBatch, received time.Time) {
 	}
 	b.clock.Observe(st)
 
-	b.applyOps(clientID, cs, batch.GetOps(), st, received)
+	// Coalesced, so the log and every client see one op per object (doc.Coalesce).
+	b.applyOps(clientID, cs, doc.Coalesce(batch.GetOps()), st, received)
 	b.metrics.BatchesApplied.Inc()
 	b.ack(clientID, &pb.Ack{ClientSeq: cs, Seq: b.seq, Stamp: st.Proto()})
 }
