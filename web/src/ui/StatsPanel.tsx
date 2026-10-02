@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import type { Connection } from "../net/connection";
 import type { SyncSession } from "../sync/session";
 
 /** What /api/stats/stream sends (internal/httpapi/stats.go). */
@@ -19,21 +20,24 @@ const ms = (v: number) => (v < 10 ? v.toFixed(1) : Math.round(v).toString());
  * Live numbers from the server this browser is connected to, once a second,
  * each labeled with what it measures. Nothing here is a benchmark result.
  */
-export function StatsPanel({ session }: { session: SyncSession }) {
+export function StatsPanel({ session, connection }: { session: SyncSession; connection: Connection }) {
   const [open, setOpen] = useState(false);
+  const [node, setNode] = useState<string | null>(null);
+  useEffect(() => connection.subscribe((s) => s.status === "connected" && setNode(s.nodeId)), [connection]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    const es = new EventSource("/api/stats/stream");
+    // Stats of the node this browser is connected to.
+    const es = new EventSource(node ? `/n/${encodeURIComponent(node)}/api/stats/stream` : "/api/stats/stream");
     es.onmessage = (e: MessageEvent<string>) => {
       setStats(JSON.parse(e.data) as Stats);
       setError(false);
     };
     es.onerror = () => setError(true);
     return () => es.close();
-  }, [open]);
+  }, [open, node]);
 
   if (!open) {
     return (

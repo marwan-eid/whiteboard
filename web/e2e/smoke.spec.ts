@@ -7,7 +7,7 @@ test("app loads, renders a canvas, and connects to a node", async ({ page }) => 
   await page.goto("/");
   await expect(page.locator("#stage canvas")).toBeVisible();
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
-  await expect(page.locator(".status")).toContainText("node-1");
+  await expect(page.locator(".status")).toContainText(/node-\d/);
   await expect(page.locator(".status")).toContainText("board: demo");
   // RTT appears after the first ping round trip.
   await expect(page.locator(".status")).toContainText(/\d+ ms/);

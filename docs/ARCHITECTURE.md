@@ -268,6 +268,13 @@ sequenceDiagram
   N2-->>C: Welcome + Acks for resent ops
   Note over N1,P: If N1 was only paused and resumes, its next INSERT hits the (board_id, seq) PK and it steps down
 ```
+- **As built (W8):** see ADR-0005's implementation notes. In short:
+  - Every node is a cluster member, even when there is only one. Compose runs two, `node-1` and `node-2`.
+  - A board is served only under a lease. Leases are renewed every 2 s for 5 s, all of a node's boards in one statement, and a board stops on its own once its lease could have run out.
+  - Clients find the owner through `/api/boards/{id}/route` and `/n/{node}/ws`, and follow `Moved`.
+  - Cross-node actions, such as revoking a link, go through Postgres `NOTIFY`.
+  - The live stats panel shows the node the browser is connected to.
+  - The `Hello` carries no pending ops: after a reconnect the client resends them as ordinary batches, and the server skips those it already has.
 
 ### 3.7 Board-wide objects and synchronized timers
 - **Board-wide objects (W7):** board state that is not a shape lives in objects with reserved ids starting with `_`: the timer (`_timer`), the vote (`_vote`) and one ballot per client (`_ballot:<client id>`). They are ordinary objects in the op log, so they get last-writer-wins merging, persistence, history and offline queuing for free.

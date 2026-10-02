@@ -5,6 +5,7 @@ import {
   FrameSchema,
   OpBatchSchema,
   ErrorCode,
+  MovedSchema,
   ServerErrorSchema,
   ServerMessageSchema,
   TimePongSchema,
@@ -22,6 +23,7 @@ class FakeSocket implements SocketLike {
   onclose: ((ev: CloseEvent) => void) | null = null;
   sent: ClientMessage[] = [];
   closed = false;
+  url = "";
 
   send(data: Uint8Array<ArrayBuffer>): void {
     this.sent.push(fromBinary(ClientMessageSchema, data));
@@ -83,8 +85,9 @@ describe("Connection", () => {
       handlers,
       pingIntervalMs: 2_000,
       wallNow: () => wall,
-      createSocket: () => {
+      createSocket: (url) => {
         const s = new FakeSocket();
+        s.url = url;
         sockets.push(s);
         return s;
       },
@@ -249,6 +252,42 @@ describe("Connection", () => {
     expect(conn.state).toEqual({ status: "rejected", reason: "access revoked" });
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
+  });
+
+  it("goes straight to the node named by Moved, and back to the default after a failure", () => {
+    conn.start();
+    expect(latest().url).toBe("ws://test/ws");
+    latest().serverOpen();
+    latest().serverSend({ case: "moved", value: create(MovedSchema, { nodeId: "node-2" }) });
+    latest().serverClose();
+    expect(sockets).toHaveLength(2);
+    expect(latest().url).toBe("ws://test/n/node-2/ws");
+    // That node dies: the next attempt, after backoff, starts from the default again.
+    latest().serverClose();
+    expect(conn.state.status).toBe("reconnecting");
+    vi.advanceTimersByTime(60_000);
+    expect(latest().url).toBe("ws://test/ws");
+  });
+
+  it("asks the route before connecting, falling back to the url if it fails", async () => {
+    const routes = [() => Promise.resolve("ws://test/n/node-3/ws"), () => Promise.reject(new Error("down"))];
+    const routed = new Connection({
+      url: "ws://test/ws",
+      boardId: "demo",
+      clientId: 8,
+      route: () => routes.shift()!(),
+      createSocket: (url) => {
+        const s = new FakeSocket();
+        s.url = url;
+        sockets.push(s);
+        return s;
+      },
+    });
+    routed.start();
+    await vi.waitFor(() => expect(latest().url).toBe("ws://test/n/node-3/ws"));
+    routed.resync();
+    await vi.waitFor(() => expect(latest().url).toBe("ws://test/ws"));
+    routed.stop();
   });
 
   it("stop() closes the socket and cancels pending retries", () => {

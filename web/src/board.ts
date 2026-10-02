@@ -21,3 +21,8 @@ export function shareTokenFromHash(hash: string): string {
 export function shareUrl(origin: string, boardId: string, token: string): string {
   return `${origin}/b/${boardId}#k=${encodeURIComponent(token)}`;
 }
+
+/** The WebSocket endpoint of one node, through the same proxy (Caddy routes /n/{node}/). */
+export function nodeWsUrl(loc: Pick<Location, "protocol" | "host">, node: string): string {
+  return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/n/${encodeURIComponent(node)}/ws`;
+}

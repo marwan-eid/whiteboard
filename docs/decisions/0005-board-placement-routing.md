@@ -46,3 +46,16 @@ The ADR-0001 model needs exactly one board actor per board, the single writer th
 - **One board on one node:** 1,000 sockets is well within one Go process. If benchmarks show that one node's fan-out is the bottleneck, the next step is two-tier fan-out through edge nodes (later scope).
 - **Failover delay:** worst case, the board is unavailable for about the lease TTL plus reconnect backoff. This is measured in BENCHMARKS.md.
 - **Postgres is a single point of failure.** Accepted for v1 and documented.
+
+## Implementation notes (W8)
+Built in `internal/cluster` and `internal/board` (`placement.go`). What changed from the plan, and why:
+- **Leases are checked locally too.** Fencing on `(board_id, seq)` keeps the log correct, but on its own it does not stop a stale owner: in a test where the owner stopped renewing but kept its sockets, it kept committing first, and the new owner's appends were the ones that failed, again and again. Now each board knows when its lease runs out, as of the start of the last successful claim or renewal plus the TTL, and stops before committing after that. The lease in Postgres lasts at least as long, because it is set from the database clock after the request was sent. Fencing still covers a process paused between that check and a commit.
+- **Only live nodes take or keep leases.** Claiming and renewing require the node's own heartbeat to be recent, checked in the same SQL statement, so a node the others consider dead cannot grab boards with a stale view of the cluster.
+- **A board's lease belongs to that board object.** The registry claims before creating a board, and an unloading board releases its own epoch, so a release can never cancel a newer claim.
+- **Routing falls back to any node.** Clients ask `GET /api/boards/{id}/route`, connect to `/n/{node}/ws`, and follow `Moved`. If the node they were sent to is unreachable, they start again from `/ws`, which Caddy sends to any live node. That node redirects, or claims the board once the old lease has expired.
+- **Board events cross nodes through Postgres `NOTIFY`.** Revoking a share link is handled by whichever node got the HTTP request, but the board may live on another node. Every node listens on one channel and kicks its own connections. Delivery is best effort; a missed event only delays the kick until the user reconnects, since joins are authorized against the database.
+- **Not built:** the chaos button in the UI (on the plan's cut list). Failover is covered by scripted tests instead.
+
+Tested by `internal/cluster`: leases and redirects; a killed owner, with no acknowledged edit lost; and a paused owner that steps down. Also by a board-level test of the fence, and by `test/e2e/kill_test.go`, which SIGKILLs the owning node of the Compose stack and does not restart it. Local results, which are not benchmarks:
+- With 5 s leases on Docker Desktop, clients were back on the other node 6.7 s after the kill. All 2,739 acknowledged batches were in Postgres.
+- In process, with 600 ms leases, clients were back in 0.87 s.

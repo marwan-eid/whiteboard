@@ -9,6 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/ws": { target: node, ws: true },
+      "/n": { target: node, ws: true },
       "/api": node,
       "/healthz": node,
     },

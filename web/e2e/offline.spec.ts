@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 
-// Kills and restarts the Compose stack's node, so it must run alone (workers: 1).
+// Kills and restarts every node of the Compose stack (a full outage), so it
+// must run alone (workers: 1). Failover between nodes is test/e2e/kill_test.go.
 
 const compose = (...args: string[]) => execFileSync("docker", ["compose", ...args], { stdio: "pipe" });
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible().length);
@@ -14,9 +15,9 @@ async function connected(p: Page): Promise<void> {
   await expect.poll(() => p.evaluate(() => window.__whiteboard!.ready()), { timeout: 15_000 }).toBe(true);
 }
 
-// A failed test must not leave the node down for the specs after it.
+// A failed test must not leave the nodes down for the specs after it.
 test.afterEach(() => {
-  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1");
+  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1", "node-2");
 });
 
 test("unsynced edits survive a reload while offline and sync when the server is back", async ({ page, browser }) => {
@@ -27,7 +28,7 @@ test("unsynced edits survive a reload while offline and sync when the server is 
   await page.mouse.dblclick(200, 200);
   await expect.poll(() => pending(page)).toBe(0);
 
-  compose("kill", "-s", "SIGKILL", "node-1");
+  compose("kill", "-s", "SIGKILL", "node-1", "node-2");
   await expect(status(page)).not.toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   await page.mouse.dblclick(450, 200);
   await page.mouse.dblclick(200, 450);
@@ -39,7 +40,7 @@ test("unsynced edits survive a reload while offline and sync when the server is 
   expect(await visible(page)).toBe(2);
   await expect(status(page)).toContainText("2 unsynced");
 
-  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1");
+  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1", "node-2");
   await expect(status(page)).toHaveAttribute("data-status", "connected", { timeout: 30_000 });
   await expect.poll(() => pending(page), { timeout: 15_000 }).toBe(0);
   await expect.poll(() => visible(page)).toBe(3);

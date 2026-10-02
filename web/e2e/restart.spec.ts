@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 
-// Kills and restarts the Compose stack's node, so it must run alone (workers: 1).
+// Kills and restarts every node of the Compose stack (a full outage), so it
+// must run alone (workers: 1). Failover between nodes is test/e2e/kill_test.go.
 
 const compose = (...args: string[]) => execFileSync("docker", ["compose", ...args], { stdio: "pipe" });
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible().length);
@@ -18,7 +19,7 @@ test("edits made while the node is down are kept and synced after it restarts", 
   await page.mouse.dblclick(450, 200);
   await expect.poll(() => pending(page)).toBe(0);
 
-  compose("kill", "-s", "SIGKILL", "node-1");
+  compose("kill", "-s", "SIGKILL", "node-1", "node-2");
   await expect(status).not.toHaveAttribute("data-status", "connected", { timeout: 15_000 });
 
   // Edit while disconnected: they show at once and count as unsynced.
@@ -28,7 +29,7 @@ test("edits made while the node is down are kept and synced after it restarts", 
   expect(await pending(page)).toBe(2);
   await expect(status).toContainText("2 unsynced");
 
-  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1");
+  compose("up", "--detach", "--wait", "--wait-timeout", "60", "node-1", "node-2");
   await expect(status).toHaveAttribute("data-status", "connected", { timeout: 30_000 });
   await expect.poll(() => pending(page), { timeout: 15_000 }).toBe(0);
 

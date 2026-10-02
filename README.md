@@ -2,7 +2,7 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-> **Status: early development. W7 (timers, voting, live stats) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, edits made offline survive a reload, and a board has a shared timer, dot voting and a live stats panel. The performance targets in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) have not been benchmarked yet; local pre-checks are in [benchmarks/results](benchmarks/results).
+> **Status: early development. W8 (scale-out) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, edits made offline survive a reload, a board has a shared timer, dot voting and a live stats panel, and the Compose stack runs two server nodes: kill the one serving a board and its users move to the other without losing acknowledged edits. The performance targets in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) have not been benchmarked yet; local pre-checks are in [benchmarks/results](benchmarks/results).
 
 ## Run it
 
@@ -62,7 +62,8 @@ npm run dev:web
 ```
 cmd/whiteboard     node binary
 cmd/loadgen        load generator
-internal/          Go packages (gateway, db, config, metrics, protocol, generated pb)
+internal/          Go packages: board (actors), cluster (leases, routing), gateway, store, access, doc, client, ...
+test/e2e/          Go tests against the Compose stack (SIGKILL failover)
 proto/             wire protocol (Protobuf), source of truth for Go and TS
 web/               browser client (TypeScript, PixiJS, Preact)
 deploy/            Dockerfiles and Caddyfile

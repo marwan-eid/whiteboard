@@ -49,6 +49,13 @@ export interface ConnectionOptions {
   viewport?: () => ViewportRect | undefined;
   /** Sent in every Hello. */
   credentials?: () => Credentials;
+  /**
+   * Finds the URL of the node serving the board (the route API), asked before
+   * each connect. Without it, or if it fails, the client uses url.
+   */
+  route?: () => Promise<string>;
+  /** The URL of a node, after the server answers Moved. Default: /n/{node}/ws on url's host. */
+  nodeUrl?: (node: string) => string;
   pingIntervalMs?: number;
   createSocket?: (url: string) => SocketLike;
   /** Monotonic clock in ms, used for RTT. */
@@ -69,7 +76,8 @@ const FATAL_ERRORS = new Set([ErrorCode.UNSUPPORTED_VERSION, ErrorCode.BAD_REQUE
  * clock offset, and reconnects with jittered backoff until stopped or rejected.
  */
 export class Connection {
-  private readonly opts: Required<Omit<ConnectionOptions, "handlers">> & { handlers: Partial<ConnectionHandlers> };
+  private readonly opts: Required<Omit<ConnectionOptions, "handlers" | "route">> &
+    Pick<ConnectionOptions, "route"> & { handlers: Partial<ConnectionHandlers> };
   private readonly listeners = new Set<Listener>();
   private readonly clock = new ClockSync();
   private socket: SocketLike | null = null;
@@ -77,6 +85,12 @@ export class Connection {
   private attempt = 0;
   private stopped = true;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Set by a Moved answer: the node to connect to next. */
+  private movedTo: string | null = null;
+  /** Moved answers since the last Welcome; past a few, back off. */
+  private moves = 0;
+  /** Bumped on every open, so a route lookup that lost a race is ignored. */
+  private generation = 0;
   private pingTimer: ReturnType<typeof setInterval> | undefined;
   private _state: ConnectionState = { status: "connecting", attempt: 0 };
 
@@ -90,6 +104,7 @@ export class Connection {
       handlers: {},
       viewport: () => undefined,
       credentials: () => ({}),
+      nodeUrl: (node: string) => opts.url.replace(/\/ws$/, `/n/${encodeURIComponent(node)}/ws`),
       ...opts,
     };
   }
@@ -172,7 +187,21 @@ export class Connection {
 
   private open(): void {
     this.setState({ status: "connecting", attempt: this.attempt });
-    const socket = this.opts.createSocket(this.opts.url);
+    const gen = ++this.generation;
+    const moved = this.movedTo;
+    this.movedTo = null;
+    if (moved !== null) return this.connect(this.opts.nodeUrl(moved));
+    if (!this.opts.route) return this.connect(this.opts.url);
+    void this.opts
+      .route()
+      .catch(() => this.opts.url)
+      .then((url) => {
+        if (!this.stopped && gen === this.generation) this.connect(url);
+      });
+  }
+
+  private connect(url: string): void {
+    const socket = this.opts.createSocket(url);
     socket.binaryType = "arraybuffer";
     this.socket = socket;
     this.welcomed = false;
@@ -185,6 +214,7 @@ export class Connection {
       const msg = decodeServerMessage(ev.data).msg;
       switch (msg.case) {
         case "welcome":
+          this.moves = 0;
           this.attempt = 0;
           this.welcomed = true;
           this.clock.seedFrom(Number(msg.value.serverTimeMs), this.opts.wallNow());
@@ -206,6 +236,11 @@ export class Connection {
           if (this._state.status === "connected") this.setState({ ...this._state, rttMs });
           break;
         }
+        case "moved":
+          // Another node serves this board; the server closes next.
+          this.movedTo = msg.value.nodeId;
+          this.moves++;
+          break;
         case "error":
           if (FATAL_ERRORS.has(msg.value.code)) rejectedReason = msg.value.message;
           break;
@@ -219,6 +254,10 @@ export class Connection {
       if (rejectedReason !== null) {
         this.stopped = true;
         this.setState({ status: "rejected", reason: rejectedReason });
+        return;
+      }
+      if (this.movedTo !== null && this.moves <= 3) {
+        this.open(); // straight to the right node
         return;
       }
       const retryInMs = backoffDelay(this.attempt, this.opts.random);

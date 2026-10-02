@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { boardIdFromPath, shareTokenFromHash, wsUrl } from "./board";
+import { boardIdFromPath, nodeWsUrl, shareTokenFromHash, wsUrl } from "./board";
 import { Camera } from "./canvas/camera";
 import { Editor } from "./canvas/editor";
 import { FrameScheduler } from "./canvas/frames";
@@ -50,6 +50,9 @@ const connection = new Connection({
   handlers,
   viewport: () => viewport.current,
   credentials: () => ({ guestToken, shareToken }),
+  // Connect to the node serving the board; any node redirects (Moved) if this is stale.
+  route: async () => nodeWsUrl(location, await api.route(boardId)),
+  nodeUrl: (node) => nodeWsUrl(location, node),
 });
 viewport.subscribe(() => connection.sendViewport());
 window.addEventListener("resize", () => viewport.check());
@@ -104,7 +107,7 @@ function renderUI(): void {
       <HistoryPanel view={historyView} canRestore={role !== Role.VIEWER} />
       <BoardMenu api={api} boardId={boardId} role={role} />
       <TimerWidget session={sync} now={() => connection.serverNow()} canEdit={role !== Role.VIEWER} />
-      <StatsPanel session={sync} />
+      <StatsPanel session={sync} connection={connection} />
       <VotePanel session={sync} editor={editor} canEdit={role !== Role.VIEWER} onBadges={onBadges} />
     </>,
     uiHost,

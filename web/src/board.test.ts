@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BOARD_ID, boardIdFromPath, shareTokenFromHash, shareUrl, wsUrl } from "./board";
+import { DEFAULT_BOARD_ID, boardIdFromPath, nodeWsUrl, shareTokenFromHash, shareUrl, wsUrl } from "./board";
 
 describe("boardIdFromPath", () => {
   it.each([
@@ -29,5 +29,11 @@ describe("share links", () => {
     expect(shareTokenFromHash(url.hash)).toBe("t0k-_");
     expect(shareTokenFromHash("")).toBe("");
     expect(shareTokenFromHash("#other=1")).toBe("");
+  });
+});
+
+describe("nodeWsUrl", () => {
+  it("addresses one node through the proxy", () => {
+    expect(nodeWsUrl({ protocol: "https:", host: "wb.example" }, "node-2")).toBe("wss://wb.example/n/node-2/ws");
   });
 });

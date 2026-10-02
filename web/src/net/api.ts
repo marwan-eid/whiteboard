@@ -70,6 +70,13 @@ export class Api {
     }
   }
 
+  /** The node serving a board (internal/cluster); no guest token needed. */
+  async route(boardId: string): Promise<string> {
+    const res = await this.fetchFn(`/api/boards/${encodeURIComponent(boardId)}/route`, { signal: AbortSignal.timeout(3_000) });
+    if (!res.ok) throw new Error(`route: ${res.status}`);
+    return ((await res.json()) as { nodeId: string }).nodeId;
+  }
+
   createBoard(title: string): Promise<BoardInfo> {
     return this.call("POST", "/api/boards", { title });
   }
