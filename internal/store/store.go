@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -124,9 +125,33 @@ func (s *Postgres) SaveSnapshot(ctx context.Context, boardID string, snap *pb.Bo
 	if err != nil {
 		return err
 	}
-	_, err = s.pool.Exec(ctx,
+	if _, err := s.pool.Exec(ctx,
 		"INSERT INTO snapshots (board_id, seq, data) VALUES ($1, $2, $3) ON CONFLICT (board_id, seq) DO NOTHING",
-		boardID, int64(snap.GetSeq()), s.enc.EncodeAll(raw, nil))
+		boardID, int64(snap.GetSeq()), s.enc.EncodeAll(raw, nil)); err != nil {
+		return err
+	}
+	return s.ThinSnapshots(ctx, boardID, SnapshotKeepAll)
+}
+
+// SnapshotKeepAll is how long every snapshot is kept (ADR-0004); older ones
+// are thinned to the last of each UTC day.
+const SnapshotKeepAll = 7 * 24 * time.Hour
+
+// ThinSnapshots deletes the board's snapshots older than keepAll, except the
+// newest of each UTC day and the newest overall. Snapshots only make loading
+// and history faster: the log (rows and segments) is never thinned, so every
+// version stays reachable by replay.
+func (s *Postgres) ThinSnapshots(ctx context.Context, boardID string, keepAll time.Duration) error {
+	_, err := s.pool.Exec(ctx, `
+		DELETE FROM snapshots s
+		WHERE s.board_id = $1
+		  AND s.created_at < now() - make_interval(secs => $2)
+		  AND s.seq < (SELECT max(seq) FROM snapshots WHERE board_id = $1)
+		  AND EXISTS (
+		    SELECT 1 FROM snapshots t
+		    WHERE t.board_id = s.board_id AND t.seq > s.seq
+		      AND date_trunc('day', t.created_at AT TIME ZONE 'UTC') = date_trunc('day', s.created_at AT TIME ZONE 'UTC'))`,
+		boardID, keepAll.Seconds())
 	return err
 }
 

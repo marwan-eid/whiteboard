@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/proto"
 
 	"whiteboard/internal/board"
@@ -17,6 +19,11 @@ import (
 )
 
 func newStore(t *testing.T) *store.Postgres {
+	s, _ := newStoreAndPool(t)
+	return s
+}
+
+func newStoreAndPool(t *testing.T) (*store.Postgres, *pgxpool.Pool) {
 	t.Helper()
 	pool := dbtest.NewPool(t)
 	if _, err := db.Migrate(context.Background(), pool); err != nil {
@@ -26,7 +33,7 @@ func newStore(t *testing.T) *store.Postgres {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s
+	return s, pool
 }
 
 func entry(seq, client, clientSeq uint64, x float64) board.LogEntry {
@@ -239,5 +246,46 @@ func TestConcurrentCompactionAndRange(t *testing.T) {
 		if e.Seq != uint64(i+1) {
 			t.Fatalf("entry %d has seq %d: duplicated or missing", i, e.Seq)
 		}
+	}
+}
+
+// Snapshots older than the keep window thin to the last of each UTC day;
+// recent ones, and the newest overall, always stay.
+func TestSnapshotThinning(t *testing.T) {
+	s, pool := newStoreAndPool(t)
+	ctx := context.Background()
+	if _, err := s.Load(ctx, "t"); err != nil {
+		t.Fatal(err)
+	}
+	ages := map[int64]string{ // seq -> how long ago it was taken
+		10: "10 days 2 hours", 20: "10 days 1 hour", // same old day: keep 20
+		30: "9 days",  // alone on its day: keep
+		40: "1 hour",  // recent: keep
+		45: "2 hours", // recent: keep
+	}
+	for seq := range ages {
+		if err := s.SaveSnapshot(ctx, "t", &pb.BoardSnapshot{Seq: uint64(seq)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for seq, age := range ages {
+		if _, err := pool.Exec(ctx, "UPDATE snapshots SET created_at = date_trunc('day', now()) + interval '12 hours' - $2::interval WHERE board_id = 't' AND seq = $1", seq, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.ThinSnapshots(ctx, "t", store.SnapshotKeepAll); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := pool.Query(ctx, "SELECT seq FROM snapshots WHERE board_id = 't' ORDER BY seq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil || fmt.Sprint(kept) != "[20 30 40 45]" {
+		t.Fatalf("kept %v (%v), want [20 30 40 45]", kept, err)
+	}
+	// Old versions are still reachable: from snapshot 20 plus the log.
+	if snap, err := s.SnapshotAtOrBefore(ctx, "t", 15); err != nil || snap != nil {
+		t.Fatalf("snapshot at or before 15 = %v, %v; want none (replay from the log)", snap, err)
 	}
 }
