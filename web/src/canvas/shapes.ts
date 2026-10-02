@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { BindingSchema, ShapeType, type Binding, type ObjectProps } from "../gen/whiteboard/v1/protocol_pb";
-import { isVisible, type Doc, type DocObject } from "../sync/doc";
+import { isShape, type Doc, type DocObject } from "../sync/doc";
 import {
   boundsOf,
   clipToEllipseBorder,
@@ -47,7 +47,7 @@ export function storedLine(p: ObjectProps): Point[] {
 export function bindingTarget(doc: Doc, b: Binding | undefined): DocObject | undefined {
   if (!b?.objectId) return undefined;
   const t = doc.get(b.objectId);
-  return t && isVisible(t) && t.props.type !== ShapeType.ARROW ? t : undefined;
+  return t && isShape(t) && t.props.type !== ShapeType.ARROW ? t : undefined;
 }
 
 export function anchorPoint(target: ObjectProps, b: Binding, r: Rect = propRect(target)): Point {

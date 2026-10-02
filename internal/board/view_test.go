@@ -9,6 +9,7 @@ import (
 	"pgregory.net/rapid"
 
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/protocol"
 )
 
 // Frames assembled from pre-encoded pieces decode to exactly the message
@@ -242,4 +243,56 @@ func TestParallelFanOut(t *testing.T) {
 		}
 	}
 	waitFor(t, func() bool { r := slow.kickedFor(); return r != nil && *r == KickSlow })
+}
+
+func TestBoardWideObjectsReachEveryView(t *testing.T) {
+	e := newEnv(t)
+	editor := newConn(10)
+	bd, _ := e.join(t, "x", editor)
+	far, lod := newConn(11), newConn(12)
+	if _, err := e.reg.Join(t.Context(), "x", far, &pb.Viewport{X: 5000, Y: 5000, W: 10, H: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.reg.Join(t.Context(), "x", lod, &pb.Viewport{X: 5000, Y: 5000, W: 10, H: 10, Lod: true}); err != nil {
+		t.Fatal(err)
+	}
+	far.next(t)
+	lod.next(t)
+
+	timer := func(cs uint64, ends int64, typ bool) *pb.OpBatch {
+		p := &pb.ObjectProps{EndsAtMs: proto.Int64(ends), RemainingMs: proto.Int64(60_000)}
+		if typ {
+			p.Type = pb.ShapeType_SHAPE_TYPE_TIMER.Enum()
+		}
+		return batch(cs, now.UnixMilli()+int64(cs), &pb.Op{Id: protocol.TimerID, Props: p})
+	}
+	// Created: arrives whole, LOD or not, wherever the client looks.
+	submit(t, bd, 10, timer(1, 1000, true))
+	for _, c := range []*fakeConn{far, lod} {
+		f := c.frame(t)
+		if len(f.Objects) != 1 || f.Objects[0].GetProps().GetEndsAtMs() != 1000 || f.Objects[0].GetProps().GetRemainingMs() != 60_000 {
+			t.Fatalf("client %d: timer frame = %v", c.id, f)
+		}
+	}
+	// Edited: arrives as a whole delta.
+	submit(t, bd, 10, timer(2, 0, false))
+	for _, c := range []*fakeConn{far, lod} {
+		f := c.frame(t)
+		if len(f.Batches) != 1 || f.Batches[0].GetOps()[0].GetProps().EndsAtMs == nil {
+			t.Fatalf("client %d: timer delta = %v", c.id, f)
+		}
+	}
+	// Moving the viewport neither drops it nor resends it.
+	if err := bd.SetViewport(t.Context(), far, &pb.Viewport{X: -5000, Y: 0, W: 10, H: 10}); err != nil {
+		t.Fatal(err)
+	}
+	far.quiet(t)
+	// A late joiner gets it in its welcome.
+	late := newConn(13)
+	if _, err := e.reg.Join(t.Context(), "x", late, &pb.Viewport{X: 9000, Y: 9000, W: 1, H: 1, Lod: true}); err != nil {
+		t.Fatal(err)
+	}
+	if w := late.next(t).GetWelcome(); fmt.Sprint(ids(w.GetObjects())) != "[_timer]" || w.GetObjects()[0].GetProps().RemainingMs == nil {
+		t.Fatalf("welcome = %v", w.GetObjects())
+	}
 }

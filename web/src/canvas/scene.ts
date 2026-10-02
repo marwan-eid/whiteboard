@@ -1,6 +1,6 @@
 import { Container, Particle, ParticleContainer, Texture } from "pixi.js";
 import { ShapeType } from "../gen/whiteboard/v1/protocol_pb";
-import { isVisible, type Doc } from "../sync/doc";
+import { isShape, type Doc } from "../sync/doc";
 import type { SyncSession } from "../sync/session";
 import type { Camera } from "./camera";
 import type { Editor } from "./editor";
@@ -109,7 +109,7 @@ export class Scene {
     for (const id of ids) {
       const o = this.doc.get(id);
       let e = this.entries.get(id);
-      if (!o || !isVisible(o)) {
+      if (!o || !isShape(o)) {
         if (e) {
           if (e.view) destroyView(e.view);
           this.entries.delete(id);

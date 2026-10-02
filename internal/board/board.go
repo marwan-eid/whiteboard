@@ -136,7 +136,8 @@ type Board struct {
 
 	// Owned by the actor goroutine.
 	doc             *doc.Doc
-	grid            *spatial.Grid // boxes of visible objects
+	grid            *spatial.Grid       // boxes of visible objects
+	boardWide       map[string]struct{} // visible board-wide objects, which every client holds
 	seq             uint64
 	clock           *hlc.Clock
 	lastClientSeq   map[uint64]uint64
@@ -216,6 +217,7 @@ func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClo
 		onClose:        onClose,
 		doc:            doc.New(),
 		grid:           spatial.NewGrid(512, 256),
+		boardWide:      map[string]struct{}{},
 		clock:          hlc.NewClock(0, func() int64 { return cfg.Now().UnixMilli() }),
 		lastClientSeq:  map[uint64]uint64{},
 		clients:        map[uint64]*clientState{},
@@ -404,9 +406,8 @@ func (b *Board) load() error {
 		b.lastClientSeq[e.ClientID] = max(b.lastClientSeq[e.ClientID], e.ClientSeq)
 	}
 	b.doc.Range(func(o *doc.Object) bool {
-		if r, ok := bounds(o); ok {
-			b.grid.Set(o.ID, r)
-		}
+		r, ok := bounds(o)
+		b.index(o.ID, r, ok)
 		return true
 	})
 	b.committedSeq.Store(b.seq)
@@ -546,11 +547,7 @@ func (b *Board) applyOps(clientID, clientSeq uint64, ops []*pb.Op, st hlc.Stamp,
 		b.doc.Apply(op, st)
 		r, ok = bounds(b.doc.Get(id))
 		p.after[i] = rectOK{r, ok}
-		if ok {
-			b.grid.Set(id, r)
-		} else {
-			b.grid.Remove(id)
-		}
+		b.index(id, r, ok)
 	}
 	b.seq++
 	p.entry = LogEntry{Seq: b.seq, ClientID: clientID, ClientSeq: clientSeq, Stamp: st.Proto(), Ops: ops}

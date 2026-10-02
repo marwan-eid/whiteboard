@@ -8,6 +8,7 @@ import {
   type ObjectState,
   type Op,
 } from "../gen/whiteboard/v1/protocol_pb";
+import { isBoardWide } from "./boardWide";
 import { compareStamps, stampFromProto, stampToProto, type Stamp } from "./stamp";
 
 /**
@@ -35,6 +36,11 @@ export interface DocObject {
 /** Created (type set) and not deleted. */
 export function isVisible(o: DocObject): boolean {
   return o.props.type !== undefined && o.props.deleted !== true;
+}
+
+/** A visible object drawn on the canvas (not the timer, vote or a ballot). */
+export function isShape(o: DocObject): boolean {
+  return isVisible(o) && !isBoardWide(o.id);
 }
 
 /**

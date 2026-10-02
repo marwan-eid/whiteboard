@@ -8,6 +8,7 @@ import (
 
 	"whiteboard/internal/doc"
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/protocol"
 	"whiteboard/internal/spatial"
 )
 
@@ -83,13 +84,31 @@ func (b *Board) judge(id uint64, c *clientState) {
 }
 
 // bounds is an object's box for interest purposes; ok is false when the
-// object is not visible (not created, or deleted).
+// object is not visible (not created, or deleted). Board-wide objects are in
+// every view.
 func bounds(o *doc.Object) (spatial.Rect, bool) {
 	if o == nil || !o.Visible() {
 		return spatial.Rect{}, false
 	}
+	if protocol.BoardWide(o.ID) {
+		return spatial.Everything, true
+	}
 	p := o.Props
 	return spatial.Rect{X: p.GetX(), Y: p.GetY(), W: p.GetW(), H: p.GetH()}, true
+}
+
+// index records where a visible object is: shapes in the grid, board-wide
+// objects in their own set (their box would cover every grid cell).
+func (b *Board) index(id string, r spatial.Rect, ok bool) {
+	switch {
+	case !ok:
+		b.grid.Remove(id)
+		delete(b.boardWide, id)
+	case protocol.BoardWide(id):
+		b.boardWide[id] = struct{}{}
+	default:
+		b.grid.Set(id, r)
+	}
 }
 
 func viewRect(v *pb.Viewport) (spatial.Rect, bool) {
@@ -99,9 +118,13 @@ func viewRect(v *pb.Viewport) (spatial.Rect, bool) {
 	return spatial.Rect{X: v.GetX(), Y: v.GetY(), W: v.GetW(), H: v.GetH()}, v.GetLod()
 }
 
-// objectsIn returns the full (or LOD) state of every visible object in r, sorted by id.
+// objectsIn returns the full (or LOD) state of every visible object in r,
+// board-wide ones included, sorted by id.
 func (b *Board) objectsIn(r spatial.Rect, lod bool) []*pb.ObjectState {
-	var ids []string
+	ids := make([]string, 0, len(b.boardWide))
+	for id := range b.boardWide {
+		ids = append(ids, id)
+	}
 	b.grid.Query(r, func(id string, _ spatial.Rect) bool {
 		ids = append(ids, id)
 		return true
@@ -114,9 +137,11 @@ func (b *Board) objectsIn(r spatial.Rect, lod bool) []*pb.ObjectState {
 	return out
 }
 
+// objectState is an object's state, cut down to what LOD clients draw;
+// board-wide objects are always whole.
 func (b *Board) objectState(id string, lod bool) *pb.ObjectState {
 	s := b.doc.Get(id).State()
-	if lod {
+	if lod && !protocol.BoardWide(id) {
 		filterState(s, lodMask)
 	}
 	return s

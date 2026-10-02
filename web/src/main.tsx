@@ -12,7 +12,7 @@ import { Controller } from "./canvas/tools";
 import { Role, ShapeType } from "./gen/whiteboard/v1/protocol_pb";
 import { Api } from "./net/api";
 import { Connection, type ConnectionHandlers } from "./net/connection";
-import { isVisible, type Doc } from "./sync/doc";
+import { isShape, type Doc } from "./sync/doc";
 import { History } from "./sync/history";
 import { HistoryView } from "./sync/historyView";
 import { acquireIdentity } from "./sync/persist";
@@ -21,6 +21,7 @@ import { SyncSession } from "./sync/session";
 import { BoardMenu } from "./ui/BoardMenu";
 import { HistoryPanel } from "./ui/HistoryPanel";
 import { StatusBadge } from "./ui/StatusBadge";
+import { TimerWidget } from "./ui/TimerWidget";
 import { Toolbar } from "./ui/Toolbar";
 
 const boardId = boardIdFromPath(location.pathname);
@@ -92,6 +93,7 @@ function renderUI(): void {
       <Toolbar editor={editor} history={history} camera={camera} center={center} onOpenHistory={() => historyView.open()} />
       <HistoryPanel view={historyView} canRestore={role !== Role.VIEWER} />
       <BoardMenu api={api} boardId={boardId} role={role} />
+      <TimerWidget session={sync} now={() => connection.serverNow()} canEdit={role !== Role.VIEWER} />
     </>,
     uiHost,
   );
@@ -163,7 +165,7 @@ declare global {
 }
 const hooks: NonNullable<Window["__whiteboard"]> = {
   visible: () =>
-    [...sync.doc.values()].filter(isVisible).map((o) => ({
+    [...sync.doc.values()].filter(isShape).map((o) => ({
       id: o.id,
       type: ShapeType[o.props.type ?? 0] ?? "UNKNOWN",
       x: o.props.x ?? 0,
@@ -183,7 +185,7 @@ const hooks: NonNullable<Window["__whiteboard"]> = {
     active: historyView.active,
     seq: historyView.seq,
     head: historyView.head,
-    shown: historyView.doc ? [...historyView.doc.values()].filter(isVisible).map((o) => o.id) : null,
+    shown: historyView.doc ? [...historyView.doc.values()].filter(isShape).map((o) => o.id) : null,
   }),
   geometry: () => null,
 };

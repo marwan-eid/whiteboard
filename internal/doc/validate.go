@@ -23,7 +23,13 @@ func (d *Doc) ValidateBatch(ops []*pb.Op, clientID uint64) error {
 	prefix := protocol.ObjectIDPrefix(clientID)
 	createdHere := map[string]bool{}
 	for i, op := range ops {
-		if err := d.validateOp(op, prefix, createdHere); err != nil {
+		var err error
+		if protocol.BoardWide(op.GetId()) {
+			err = d.validateBoardWide(op, clientID, createdHere)
+		} else {
+			err = d.validateOp(op, prefix, createdHere)
+		}
+		if err != nil {
 			return fmt.Errorf("%w: op %d (%q): %w", ErrInvalid, i, op.GetId(), err)
 		}
 	}
@@ -57,6 +63,9 @@ func (d *Doc) validateOp(op *pb.Op, prefix string, createdHere map[string]bool) 
 }
 
 func validateProps(p *pb.ObjectProps) error {
+	if fieldMask(p)&boardWideOnly != 0 {
+		return errors.New("timer and vote properties are for board-wide objects only")
+	}
 	for _, c := range []struct {
 		name  string
 		v     *float64

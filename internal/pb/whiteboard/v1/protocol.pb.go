@@ -140,6 +140,14 @@ const (
 	ShapeType_SHAPE_TYPE_TEXT        ShapeType = 4
 	ShapeType_SHAPE_TYPE_ARROW       ShapeType = 5
 	ShapeType_SHAPE_TYPE_FREEHAND    ShapeType = 6
+	// Board-wide objects (ids starting with "_"; see protocol.BoardWide) hold
+	// board state rather than shapes. Every client gets them, whatever its viewport.
+	// The countdown timer, id "_timer".
+	ShapeType_SHAPE_TYPE_TIMER ShapeType = 7
+	// The dot-voting session, id "_vote".
+	ShapeType_SHAPE_TYPE_VOTE ShapeType = 8
+	// One client's votes in the session, id "_ballot:<client id in base 36>".
+	ShapeType_SHAPE_TYPE_BALLOT ShapeType = 9
 )
 
 // Enum value maps for ShapeType.
@@ -152,6 +160,9 @@ var (
 		4: "SHAPE_TYPE_TEXT",
 		5: "SHAPE_TYPE_ARROW",
 		6: "SHAPE_TYPE_FREEHAND",
+		7: "SHAPE_TYPE_TIMER",
+		8: "SHAPE_TYPE_VOTE",
+		9: "SHAPE_TYPE_BALLOT",
 	}
 	ShapeType_value = map[string]int32{
 		"SHAPE_TYPE_UNSPECIFIED": 0,
@@ -161,6 +172,9 @@ var (
 		"SHAPE_TYPE_TEXT":        4,
 		"SHAPE_TYPE_ARROW":       5,
 		"SHAPE_TYPE_FREEHAND":    6,
+		"SHAPE_TYPE_TIMER":       7,
+		"SHAPE_TYPE_VOTE":        8,
+		"SHAPE_TYPE_BALLOT":      9,
 	}
 )
 
@@ -910,9 +924,20 @@ type ObjectProps struct {
 	// deltas of integer (dx, dy) pairs (see web/src/canvas/geometry.ts).
 	Points []byte `protobuf:"bytes,12,opt,name=points,proto3,oneof" json:"points,omitempty"`
 	// Arrow ends attached to other objects; an empty object_id means unattached.
-	From          *Binding `protobuf:"bytes,13,opt,name=from,proto3,oneof" json:"from,omitempty"`
-	To            *Binding `protobuf:"bytes,14,opt,name=to,proto3,oneof" json:"to,omitempty"`
-	FontSize      *float32 `protobuf:"fixed32,15,opt,name=font_size,json=fontSize,proto3,oneof" json:"font_size,omitempty"`
+	From     *Binding `protobuf:"bytes,13,opt,name=from,proto3,oneof" json:"from,omitempty"`
+	To       *Binding `protobuf:"bytes,14,opt,name=to,proto3,oneof" json:"to,omitempty"`
+	FontSize *float32 `protobuf:"fixed32,15,opt,name=font_size,json=fontSize,proto3,oneof" json:"font_size,omitempty"`
+	// Timer: running until this server time (ms since the epoch); 0 when not running.
+	EndsAtMs *int64 `protobuf:"varint,16,opt,name=ends_at_ms,json=endsAtMs,proto3,oneof" json:"ends_at_ms,omitempty"`
+	// Timer: while running, its full duration; while paused, what is left; 0 when cleared.
+	RemainingMs *int64 `protobuf:"varint,17,opt,name=remaining_ms,json=remainingMs,proto3,oneof" json:"remaining_ms,omitempty"`
+	// Vote: how many dots each client may place.
+	VotesPerUser *uint32 `protobuf:"varint,18,opt,name=votes_per_user,json=votesPerUser,proto3,oneof" json:"votes_per_user,omitempty"`
+	// Vote: the session has ended and its results are shown.
+	Closed *bool `protobuf:"varint,19,opt,name=closed,proto3,oneof" json:"closed,omitempty"`
+	// Ballot: the voted-for object ids, comma-separated, once per dot. A ballot's
+	// text and a vote's text hold the session id.
+	Votes         *string `protobuf:"bytes,20,opt,name=votes,proto3,oneof" json:"votes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1050,6 +1075,41 @@ func (x *ObjectProps) GetFontSize() float32 {
 		return *x.FontSize
 	}
 	return 0
+}
+
+func (x *ObjectProps) GetEndsAtMs() int64 {
+	if x != nil && x.EndsAtMs != nil {
+		return *x.EndsAtMs
+	}
+	return 0
+}
+
+func (x *ObjectProps) GetRemainingMs() int64 {
+	if x != nil && x.RemainingMs != nil {
+		return *x.RemainingMs
+	}
+	return 0
+}
+
+func (x *ObjectProps) GetVotesPerUser() uint32 {
+	if x != nil && x.VotesPerUser != nil {
+		return *x.VotesPerUser
+	}
+	return 0
+}
+
+func (x *ObjectProps) GetClosed() bool {
+	if x != nil && x.Closed != nil {
+		return *x.Closed
+	}
+	return false
+}
+
+func (x *ObjectProps) GetVotes() string {
+	if x != nil && x.Votes != nil {
+		return *x.Votes
+	}
+	return ""
 }
 
 // Where an arrow end attaches: a point on the target's bounding box, as
@@ -1992,7 +2052,7 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x05Stamp\x12\x17\n" +
 	"\awall_ms\x18\x01 \x01(\x03R\x06wallMs\x12\x18\n" +
 	"\acounter\x18\x02 \x01(\rR\acounter\x12\x1b\n" +
-	"\tclient_id\x18\x03 \x01(\x04R\bclientId\"\xdc\x04\n" +
+	"\tclient_id\x18\x03 \x01(\x04R\bclientId\"\xd2\x06\n" +
 	"\vObjectProps\x121\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x18.whiteboard.v1.ShapeTypeH\x00R\x04type\x88\x01\x01\x12\x1d\n" +
 	"\adeleted\x18\x02 \x01(\bH\x01R\adeleted\x88\x01\x01\x12\x11\n" +
@@ -2010,7 +2070,13 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x06points\x18\f \x01(\fH\vR\x06points\x88\x01\x01\x12/\n" +
 	"\x04from\x18\r \x01(\v2\x16.whiteboard.v1.BindingH\fR\x04from\x88\x01\x01\x12+\n" +
 	"\x02to\x18\x0e \x01(\v2\x16.whiteboard.v1.BindingH\rR\x02to\x88\x01\x01\x12 \n" +
-	"\tfont_size\x18\x0f \x01(\x02H\x0eR\bfontSize\x88\x01\x01B\a\n" +
+	"\tfont_size\x18\x0f \x01(\x02H\x0eR\bfontSize\x88\x01\x01\x12!\n" +
+	"\n" +
+	"ends_at_ms\x18\x10 \x01(\x03H\x0fR\bendsAtMs\x88\x01\x01\x12&\n" +
+	"\fremaining_ms\x18\x11 \x01(\x03H\x10R\vremainingMs\x88\x01\x01\x12)\n" +
+	"\x0evotes_per_user\x18\x12 \x01(\rH\x11R\fvotesPerUser\x88\x01\x01\x12\x1b\n" +
+	"\x06closed\x18\x13 \x01(\bH\x12R\x06closed\x88\x01\x01\x12\x19\n" +
+	"\x05votes\x18\x14 \x01(\tH\x13R\x05votes\x88\x01\x01B\a\n" +
 	"\x05_typeB\n" +
 	"\n" +
 	"\b_deletedB\x04\n" +
@@ -2027,7 +2093,12 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x05_fromB\x05\n" +
 	"\x03_toB\f\n" +
 	"\n" +
-	"_font_size\"\\\n" +
+	"_font_sizeB\r\n" +
+	"\v_ends_at_msB\x0f\n" +
+	"\r_remaining_msB\x11\n" +
+	"\x0f_votes_per_userB\t\n" +
+	"\a_closedB\b\n" +
+	"\x06_votes\"\\\n" +
 	"\aBinding\x12\x1b\n" +
 	"\tobject_id\x18\x01 \x01(\tR\bobjectId\x12\x19\n" +
 	"\banchor_x\x18\x02 \x01(\x02R\aanchorX\x12\x19\n" +
@@ -2101,7 +2172,7 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x16ERROR_CODE_BAD_REQUEST\x10\x01\x12\"\n" +
 	"\x1eERROR_CODE_UNSUPPORTED_VERSION\x10\x02\x12\x1f\n" +
 	"\x1bERROR_CODE_CLIENT_ID_IN_USE\x10\x03\x12\x18\n" +
-	"\x14ERROR_CODE_FORBIDDEN\x10\x04*\xaf\x01\n" +
+	"\x14ERROR_CODE_FORBIDDEN\x10\x04*\xf1\x01\n" +
 	"\tShapeType\x12\x1a\n" +
 	"\x16SHAPE_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fSHAPE_TYPE_RECT\x10\x01\x12\x16\n" +
@@ -2109,7 +2180,10 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\x11SHAPE_TYPE_STICKY\x10\x03\x12\x13\n" +
 	"\x0fSHAPE_TYPE_TEXT\x10\x04\x12\x14\n" +
 	"\x10SHAPE_TYPE_ARROW\x10\x05\x12\x17\n" +
-	"\x13SHAPE_TYPE_FREEHAND\x10\x06B\xaa\x01\n" +
+	"\x13SHAPE_TYPE_FREEHAND\x10\x06\x12\x14\n" +
+	"\x10SHAPE_TYPE_TIMER\x10\a\x12\x13\n" +
+	"\x0fSHAPE_TYPE_VOTE\x10\b\x12\x15\n" +
+	"\x11SHAPE_TYPE_BALLOT\x10\tB\xaa\x01\n" +
 	"\x11com.whiteboard.v1B\rProtocolProtoP\x01Z1whiteboard/internal/pb/whiteboard/v1;whiteboardv1\xa2\x02\x03WXX\xaa\x02\rWhiteboard.V1\xca\x02\rWhiteboard\\V1\xe2\x02\x19Whiteboard\\V1\\GPBMetadata\xea\x02\x0eWhiteboard::V1b\x06proto3"
 
 var (

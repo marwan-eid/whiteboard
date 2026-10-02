@@ -115,6 +115,14 @@ enum ShapeType {
   SHAPE_TYPE_TEXT = 4;
   SHAPE_TYPE_ARROW = 5;
   SHAPE_TYPE_FREEHAND = 6;
+  // Board-wide objects (ids starting with "_"; see protocol.BoardWide) hold
+  // board state rather than shapes. Every client gets them, whatever its viewport.
+  // The countdown timer, id "_timer".
+  SHAPE_TYPE_TIMER = 7;
+  // The dot-voting session, id "_vote".
+  SHAPE_TYPE_VOTE = 8;
+  // One client's votes in the session, id "_ballot:<client id in base 36>".
+  SHAPE_TYPE_BALLOT = 9;
 }
 
 // Field numbers must stay below 32: FieldStamps uses them as bit positions.
@@ -140,6 +148,18 @@ message ObjectProps {
   optional Binding from = 13;
   optional Binding to = 14;
   optional float font_size = 15;
+
+  // Timer: running until this server time (ms since the epoch); 0 when not running.
+  optional int64 ends_at_ms = 16;
+  // Timer: while running, its full duration; while paused, what is left; 0 when cleared.
+  optional int64 remaining_ms = 17;
+  // Vote: how many dots each client may place.
+  optional uint32 votes_per_user = 18;
+  // Vote: the session has ended and its results are shown.
+  optional bool closed = 19;
+  // Ballot: the voted-for object ids, comma-separated, once per dot. A ballot's
+  // text and a vote's text hold the session id.
+  optional string votes = 20;
 }
 
 // Where an arrow end attaches: a point on the target's bounding box, as

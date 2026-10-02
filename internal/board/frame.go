@@ -3,6 +3,8 @@ package board
 import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	"whiteboard/internal/protocol"
 )
 
 // Encode-once fan-out: every op, cursor update and entering object is
@@ -44,7 +46,9 @@ func encodeBatch(e LogEntry, before, after []rectOK) encodedBatch {
 	for _, op := range e.Ops {
 		eb.ids = append(eb.ids, op.GetId())
 		eb.ops = append(eb.ops, appendMessage(nil, fieldSequencedBatchOps, op))
-		if lop := lodOp(op); lop != nil {
+		if protocol.BoardWide(op.GetId()) {
+			eb.lodOps = append(eb.lodOps, eb.ops[len(eb.ops)-1]) // LOD clients get these whole
+		} else if lop := lodOp(op); lop != nil {
 			eb.lodOps = append(eb.lodOps, appendMessage(nil, fieldSequencedBatchOps, lop))
 		} else {
 			eb.lodOps = append(eb.lodOps, nil)

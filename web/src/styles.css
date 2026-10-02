@@ -298,3 +298,86 @@ body {
   color: var(--warn);
   font-weight: 600;
 }
+
+.timer {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.timer[data-state="idle"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  flex-direction: column;
+}
+
+.timer button {
+  min-width: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.timer button.primary {
+  background: #0969da;
+  border-color: #0969da;
+  color: #fff;
+}
+
+.timer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.timer .time {
+  min-width: 3.5em;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer .label {
+  color: var(--muted);
+}
+
+.timer[data-state="up"] .time,
+.timer[data-state="up"] .label {
+  color: var(--bad);
+}
+
+.timer-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+
+.timer-menu input {
+  width: 4.5em;
+  margin-right: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}

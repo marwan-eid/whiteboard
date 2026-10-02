@@ -269,13 +269,13 @@ sequenceDiagram
   Note over N1,P: If N1 was only paused and resumes, its next INSERT hits the (board_id, seq) PK and it steps down
 ```
 
-### 3.7 Synchronized timers
-- **State:** the server holds `{endsAtServerMs | pausedRemainingMs, duration}` and records each change as an op.
-- **Clock offset:** on join, the client sends 8 `TimePing` messages and keeps the one with the lowest round-trip time (RTT):
-  - `offset = tServer + rtt/2 − t_recv`
-  - It re-estimates every 60 s.
-- **Display:** `remaining = endsAtServerMs − (Date.now() + offset)`, updated every animation frame.
-- **Measured quality:** timer skew is measured in BENCHMARKS.md.
+### 3.7 Board-wide objects and synchronized timers
+- **Board-wide objects (W7):** board state that is not a shape lives in objects with reserved ids starting with `_`: the timer (`_timer`), the vote (`_vote`) and one ballot per client (`_ballot:<client id>`). They are ordinary objects in the op log, so they get last-writer-wins merging, persistence, history and offline queuing for free.
+  - **Delivery:** their interest box is "everywhere", so every client holds them whatever its viewport, and they are never cut down for zoomed-out (LOD) clients. They are kept out of the spatial grid and are not drawn on the canvas.
+  - **Validation:** each has its own type and a fixed set of fields it may set; shapes may not set those fields. A client may write only its own ballot.
+- **Timer state:** `ends_at_ms` (server time when it runs out; 0 when not running) and `remaining_ms` (the full duration while running, what is left while paused). Every control writes both fields in one op, so concurrent clicks resolve to one of them, whole. Any editor can start, pause, resume, add a minute or reset.
+- **Clock offset:** the client pings every 2 s and uses the lowest-RTT sample of the last 8: `offset = tServer + rtt/2 − t_recv`. Display is `ends_at_ms − (Date.now() + offset)`, redrawn every 200 ms, so a wrong local clock does not matter. A browser test runs one browser with its clock an hour fast and checks both show the same time to within a second.
+- **Measured quality:** timer skew under load is measured in BENCHMARKS.md (not yet run).
 
 ### 3.8 Voting
 - **Session:** the board owner starts a session: `{sessionId, votesPerUser, anonymous, endsAt}`.
