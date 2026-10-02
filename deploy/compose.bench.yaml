@@ -1,0 +1,16 @@
+# Benchmark rig (docs/BENCHMARKS.md, scenario 1), used by .github/workflows/bench.yml:
+#   docker compose -f compose.yaml -f deploy/compose.bench.yaml up -d --build --wait postgres node-1
+# The server (one node and Postgres) gets cores 0-1; the load generator runs
+# on cores 2-3 with taskset. The node uses the host's network, so the
+# loadgen reaches it directly on 127.0.0.1:8081, with no Docker port proxy
+# in between (one board lives on one node, so Caddy is not involved).
+services:
+  postgres:
+    cpuset: "0-1"
+  node-1:
+    cpuset: "0-1"
+    network_mode: host
+    environment:
+      DATABASE_URL: postgres://whiteboard:${POSTGRES_PASSWORD:-whiteboard}@127.0.0.1:5432/whiteboard?sslmode=disable
+      # Every simulated editor comes from one address.
+      MAX_CONNS_PER_IP: "0"

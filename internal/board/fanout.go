@@ -2,6 +2,7 @@ package board
 
 import (
 	"cmp"
+	"math"
 	"runtime"
 	"slices"
 	"sync"
@@ -32,7 +33,9 @@ type tickFrames struct {
 	batches  []encodedBatch
 	presence bool            // cursors are recomputed this tick
 	moved    map[uint64]bool // cursors that moved since the last presence tick
-	online   int             // clients on the board, or -1 if unchanged
+	// nearest caches nearestCursors by snapped view, for this tick only.
+	nearest sync.Map
+	online  int // clients on the board, or -1 if unchanged
 }
 
 type target struct {
@@ -120,7 +123,7 @@ func (b *Board) buildFrame(w *frameWorker, id uint64, c *clientState, t *tickFra
 		fb.message(fieldFrameAcks, a)
 	}
 	if t.presence && (len(t.moved) > 0 || c.presenceStale) {
-		b.appendCursors(w, fb, id, c, t.moved)
+		b.appendCursors(w, fb, id, c, t)
 		c.presenceStale = false
 	}
 	if len(c.moves) > 0 {
@@ -151,34 +154,19 @@ func (b *Board) buildFrame(w *frameWorker, id uint64, c *clientState, t *tickFra
 // appendCursors adds the cursors a client should see: others in its view,
 // nearest to its center first, at most maxCursorsPerClient. It sends cursors
 // that moved or newly appeared, and gone for those that left its selection.
-func (b *Board) appendCursors(w *frameWorker, fb *frameBuilder, id uint64, c *clientState, moved map[uint64]bool) {
-	cx, cy := c.view.X+c.view.W/2, c.view.Y+c.view.H/2
+func (b *Board) appendCursors(w *frameWorker, fb *frameBuilder, id uint64, c *clientState, t *tickFrames) {
 	w.cands = w.cands[:0]
-	b.cursorGrid.Query(c.view, func(key string, r spatial.Rect) bool {
-		if cid := b.cursorIDs[key]; cid != id {
-			dx, dy := r.X-cx, r.Y-cy
-			w.cands = append(w.cands, cursorCand{cid, r.X, r.Y, dx*dx + dy*dy})
+	for _, k := range b.nearestCursors(c.view, t) {
+		if k.id != id && len(w.cands) < maxCursorsPerClient {
+			w.cands = append(w.cands, k)
 		}
-		return true
-	})
-	if len(w.cands) > maxCursorsPerClient {
-		slices.SortFunc(w.cands, func(a, b cursorCand) int {
-			switch {
-			case a.d < b.d:
-				return -1
-			case a.d > b.d:
-				return 1
-			}
-			return 0
-		})
-		w.cands = w.cands[:maxCursorsPerClient]
 	}
 	slices.SortFunc(w.cands, func(a, b cursorCand) int { return cmp.Compare(a.id, b.id) })
 
 	visible := make(map[uint64]struct{}, len(w.cands))
 	for _, k := range w.cands {
 		visible[k.id] = struct{}{}
-		if _, shown := c.shownCursors[k.id]; !shown || moved[k.id] {
+		if _, shown := c.shownCursors[k.id]; !shown || t.moved[k.id] {
 			fb.raw(w.cursorEntry(k))
 		}
 	}
@@ -188,6 +176,82 @@ func (b *Board) appendCursors(w *frameWorker, fb *frameBuilder, id uint64, c *cl
 		}
 	}
 	c.shownCursors = visible
+}
+
+// cursorCell is the granularity views are snapped to for nearestCursors.
+const cursorCell = 64
+
+type viewKey struct{ x0, y0, x1, y1 int64 }
+
+// nearestCursors returns the maxCursorsPerClient+1 cursors nearest the
+// center of view (one more, so each client can drop its own). The answer is
+// shared, within a presence tick, by every client whose view snaps outward
+// to the same cursorCell grid: many people looking at one region cost one
+// computation, not one each.
+func (b *Board) nearestCursors(view spatial.Rect, t *tickFrames) []cursorCand {
+	cell := func(v float64, up bool) int64 {
+		f := v / cursorCell
+		if up {
+			return int64(math.Ceil(f))
+		}
+		return int64(math.Floor(f))
+	}
+	key, q := viewKey{x0: 1}, view // a key no real view has, for the whole board
+	if view != spatial.Everything {
+		key = viewKey{cell(view.X, false), cell(view.Y, false), cell(view.X+view.W, true), cell(view.Y+view.H, true)}
+		q = spatial.Rect{
+			X: float64(key.x0 * cursorCell), Y: float64(key.y0 * cursorCell),
+			W: float64((key.x1 - key.x0) * cursorCell), H: float64((key.y1 - key.y0) * cursorCell),
+		}
+	}
+	if v, ok := t.nearest.Load(key); ok {
+		return v.([]cursorCand)
+	}
+	cx, cy := q.X+q.W/2, q.Y+q.H/2
+	var cands []cursorCand
+	b.cursorGrid.Query(q, func(key string, r spatial.Rect) bool {
+		dx, dy := r.X-cx, r.Y-cy
+		cands = append(cands, cursorCand{b.cursorIDs[key], r.X, r.Y, dx*dx + dy*dy})
+		return true
+	})
+	if keep := maxCursorsPerClient + 1; len(cands) > keep {
+		selectNearest(cands, keep)
+		cands = cands[:keep]
+	}
+	slices.SortFunc(cands, func(a, b cursorCand) int { return cmp.Compare(a.d, b.d) })
+	t.nearest.Store(key, cands)
+	return cands
+}
+
+// selectNearest reorders c so its first k elements are the k smallest by d
+// (quickselect: linear on average, where sorting everything is n log n).
+func selectNearest(c []cursorCand, k int) {
+	lo, hi := 0, len(c)-1
+	for lo < hi {
+		p := c[(lo+hi)/2].d
+		i, j := lo, hi
+		for i <= j {
+			for c[i].d < p {
+				i++
+			}
+			for c[j].d > p {
+				j--
+			}
+			if i <= j {
+				c[i], c[j] = c[j], c[i]
+				i++
+				j--
+			}
+		}
+		switch {
+		case k-1 <= j:
+			hi = j
+		case k-1 >= i:
+			lo = i
+		default:
+			return
+		}
+	}
 }
 
 // cursorEntry encodes a cursor position once per tick per worker.

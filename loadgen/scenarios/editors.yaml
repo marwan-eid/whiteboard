@@ -1,0 +1,22 @@
+# docs/BENCHMARKS.md, scenario 1: editors on one board. The sweep runs this
+# with -editors 100, 250, 500, 1000, 1500, 2000. The board is seeded first
+# with 10k objects: go run ./cmd/seed -objects 10000 -layout grid
+editors: 1000
+ramp: 60s        # editors join evenly over this
+warmup: 10s      # after the ramp, not measured
+duration: 310s   # editing time after the ramp: 5 min measured
+ops_per_sec: 1   # per editor, on average
+mix:             # shares of ops
+  drag: 0.60     # moves, in bursts (below)
+  create: 0.20   # new sticky notes
+  text: 0.15     # text edits
+  delete: 0.05
+drag:
+  hz: 10
+  min: 1s
+  max: 2s
+cursor_hz: 15
+hotspot: 0.5     # half the editors look at the shared center, half spread out
+area: 20000      # side of the square region editors spread over
+view: { w: 1920, h: 1080 }  # each editor subscribes to this plus 50% per side
+objects_per_editor: 3

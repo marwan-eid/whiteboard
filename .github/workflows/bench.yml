@@ -1,0 +1,110 @@
+# Benchmark scenario 1 (docs/BENCHMARKS.md): editors on one board, sync
+# latency. Run from the Actions tab. Each (editors, run) pair is its own job
+# on its own runner; the summary job collects them into one table.
+name: bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      editors:
+        description: "Editor counts, as a JSON array"
+        default: "[100, 250, 500, 1000, 1500, 2000]"
+      runs:
+        description: "Runs per editor count, as a JSON array of run numbers"
+        default: "[1, 2, 3]"
+      duration:
+        description: "Editing time after the ramp (scenario default: 310s)"
+        default: "310s"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ matrix.editors }} editors, run ${{ matrix.run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        editors: ${{ fromJSON(inputs.editors) }}
+        run: ${{ fromJSON(inputs.runs) }}
+    env:
+      OUT: results/${{ matrix.editors }}-${{ matrix.run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Record the setup
+        run: |
+          mkdir -p "$OUT"
+          {
+            echo "commit: $(git rev-parse HEAD)"
+            echo "go: $(go version)"
+            echo "runner: $RUNNER_NAME ($ImageOS $ImageVersion)"
+            echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}"
+            echo "server: 1 node + Postgres on cores 0-1 (deploy/compose.bench.yaml); loadgen on cores 2-3"
+            echo "--- lscpu"; lscpu
+            echo "--- free -m"; free -m
+            echo "--- docker"; docker version --format '{{.Server.Version}}'
+          } > "$OUT/setup.txt"
+          cat "$OUT/setup.txt"
+      - name: Raise limits for thousands of sockets
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_port_range="10240 65535"
+          sudo sysctl -w fs.file-max=1048576
+      - name: Start the server
+        run: docker compose -f compose.yaml -f deploy/compose.bench.yaml up -d --build --wait --wait-timeout 300 postgres node-1
+      - name: Build the tools
+        run: go build -o bin/ ./cmd/loadgen ./cmd/seed ./cmd/benchsum
+      - name: Seed 10k objects
+        run: bin/seed -url ws://localhost:8081/ws -board bench -objects 10000 -layout grid
+      - name: Run the scenario
+        run: |
+          ulimit -n 65535
+          curl -s localhost:8081/metrics > "$OUT/metrics-before.txt"
+          # Samplers: container CPU and memory every 5 s, the node's live stats every 10 s.
+          ( while true; do docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' >> "$OUT/docker-stats.csv"; sleep 5; done ) &
+          samplers=$!
+          ( while true; do curl -s localhost:8081/api/stats >> "$OUT/stats.jsonl"; echo >> "$OUT/stats.jsonl"; sleep 10; done ) &
+          samplers="$samplers $!"
+          # A 30 s CPU profile of the node, two minutes in (inside the measured window).
+          ( sleep 120; curl -s -o "$OUT/node-cpu.pprof" "localhost:8081/debug/pprof/profile?seconds=30" ) &
+          status=0
+          /usr/bin/time -f '%e %U %S' -o "$OUT/time.txt" taskset -c 2,3 bin/loadgen \
+            -scenario loadgen/scenarios/editors.yaml -editors ${{ matrix.editors }} -duration ${{ inputs.duration }} \
+            -url ws://localhost:8081/ws -board bench -seed ${{ matrix.run }} \
+            -json "$OUT/loadgen.json" -hlog "$OUT/latency.hlog" 2>&1 | tee "$OUT/loadgen.log" || status=$?
+          curl -s localhost:8081/metrics > "$OUT/metrics-after.txt"
+          kill $samplers || true
+          exit $status
+      - if: always()
+        run: docker compose logs node-1 > "$OUT/node.log" 2>&1 || true
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ matrix.editors }}-${{ matrix.run }}
+          path: results/
+
+  summary:
+    needs: run
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: bench-*
+          path: results/
+          merge-multiple: true
+      - run: go run ./cmd/benchsum results | tee summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-summary
+          path: |
+            summary.md
+            results/
