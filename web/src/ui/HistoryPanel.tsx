@@ -32,6 +32,9 @@ export function HistoryPanel({ view, canRestore }: { view: HistoryView; canResto
             Restore this version
           </button>
         )}
+        <button aria-label={view.playing ? "Pause replay" : "Replay history"} onClick={() => (view.playing ? view.pause() : view.play())}>
+          {view.playing ? "⏸ Pause" : "▶ Replay"}
+        </button>
         <button onClick={() => view.close()}>Back to live</button>
       </div>
     </div>

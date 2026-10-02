@@ -25,6 +25,7 @@ export class HistoryView {
   /** The board at seq, once it arrives. */
   doc: Doc | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private player: ReturnType<typeof setInterval> | undefined;
   private readonly listeners = new Set<() => void>();
 
   constructor(private readonly opts: HistoryViewOptions) {}
@@ -52,6 +53,36 @@ export class HistoryView {
     this.changed();
   }
 
+  get playing(): boolean {
+    return this.player !== undefined;
+  }
+
+  /**
+   * Replays history: steps forward about 80 times from the version shown (or
+   * from the start, if already at the latest), waiting for each state before
+   * the next, and stops at the latest version.
+   */
+  play(stepMs = 150): void {
+    if (!this.active || this.playing) return;
+    if (this.seq >= this.head) this.seek(0);
+    const step = Math.max(1, Math.ceil(this.head / 80));
+    this.player = setInterval(() => {
+      if (this.loading) return;
+      if (this.seq >= this.head) {
+        this.pause();
+        return;
+      }
+      this.seek(this.seq + step);
+    }, stepMs);
+    this.changed();
+  }
+
+  pause(): void {
+    clearInterval(this.player);
+    this.player = undefined;
+    this.changed();
+  }
+
   /** Makes the live board look like the version shown, then leaves history mode. */
   restore(): void {
     if (this.active && this.seq < this.head) this.opts.restore(this.seq);
@@ -60,6 +91,8 @@ export class HistoryView {
 
   close(): void {
     clearTimeout(this.timer);
+    clearInterval(this.player);
+    this.player = undefined;
     this.active = false;
     this.doc = null;
     this.loading = false;

@@ -31,6 +31,14 @@ test("scrub history, restore a version, and undo the restore", async ({ browser 
   await a.mouse.dblclick(900, 500); // ignored: history mode is read-only
   await expect(a.locator(".history")).toContainText("Version 1 of 3");
 
+  // Replay runs forward to the latest version, showing each state on the way.
+  await a.getByRole("button", { name: "Replay history" }).click();
+  await expect(a.locator(".history")).toContainText("Version 3 of 3", { timeout: 10_000 });
+  await expect.poll(async () => (await hist(a)).shown?.length).toBe(3);
+  await expect(a.getByRole("button", { name: "Replay history" })).toBeVisible(); // stopped by itself
+  await a.locator('.history input[type="range"]').fill("1");
+  await expect.poll(async () => (await hist(a)).shown?.length).toBe(1);
+
   // Restore it: both browsers go back to one shape.
   await a.getByRole("button", { name: "Restore this version" }).click();
   await expect(a.locator(".history")).toBeHidden();
