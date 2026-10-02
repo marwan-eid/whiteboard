@@ -3,6 +3,19 @@
 	admin off
 }
 
+# A node that stops answering (crashed, or frozen with its TCP port still
+# accepting) is taken out of rotation within about two seconds, instead of
+# holding reconnecting clients until it comes back.
+(node_health) {
+	health_uri /healthz
+	health_interval 1s
+	health_timeout 1s
+	transport http {
+		dial_timeout 2s
+		response_header_timeout 5s
+	}
+}
+
 # SITE_ADDRESS defaults to plain HTTP on :80. Set it to a domain name
 # (e.g. board.example.com) and publish ports 80/443 to get automatic HTTPS.
 {$SITE_ADDRESS::80} {
@@ -12,10 +25,14 @@
 	# (GET /api/boards/{id}/route). The node checks its lease and answers
 	# Moved if the board lives elsewhere.
 	handle /n/node-1/* {
-		reverse_proxy node-1:8081
+		reverse_proxy node-1:8081 {
+			import node_health
+		}
 	}
 	handle /n/node-2/* {
-		reverse_proxy node-2:8081
+		reverse_proxy node-2:8081 {
+			import node_health
+		}
 	}
 
 	# Read-only dashboards (deploy/compose.prod.yaml).
@@ -31,6 +48,7 @@
 			lb_policy round_robin
 			lb_try_duration 5s
 			fail_duration 10s
+			import node_health
 		}
 	}
 
