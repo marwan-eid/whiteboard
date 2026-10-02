@@ -2,7 +2,9 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-> **Status: W9 (load testing) of [the plan](docs/PLAN.md) is done; deployment is next.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, edits made offline survive a reload, a board has a shared timer, dot voting and a live stats panel, and the Compose stack runs two server nodes: kill the one serving a board and its users move to the other without losing acknowledged edits. **Measured** on free GitHub Actions runners (loopback, one node on 2 cores): sync p99 21.8 ms at 100 editors and 58.4 ms at 500 on one board. The 1,000-editor target (p99 < 100 ms) was **not** reached: 231 ms at 1,000 editors ([results](benchmarks/results/2026-10-02-sync.md)). A 100k-object board pans at p95 under 7 ms on a laptop GPU ([results](benchmarks/results/2026-10-02-browser-100k.md)).
+**Live demo: https://51-170-191-178.sslip.io** (open it in two windows). It runs on Oracle Cloud's free tier, currently on a small fallback VM; see [docs/DEPLOY.md](docs/DEPLOY.md).
+
+> **Status: deployed (W10 of [the plan](docs/PLAN.md)); launch is next.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, edits made offline survive a reload, a board has a shared timer, dot voting and a live stats panel, and the Compose stack runs two server nodes: kill the one serving a board and its users move to the other without losing acknowledged edits. **Measured** on free GitHub Actions runners (loopback, one node on 2 cores): sync p99 21.8 ms at 100 editors and 58.4 ms at 500 on one board. The 1,000-editor target (p99 < 100 ms) was **not** reached: 231 ms at 1,000 editors ([results](benchmarks/results/2026-10-02-sync.md)). A 100k-object board pans at p95 under 7 ms on a laptop GPU ([results](benchmarks/results/2026-10-02-browser-100k.md)).
 
 ## Run it
 
@@ -74,5 +76,6 @@ docs/              architecture, plan, benchmarks, decisions (ADRs)
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Plan](docs/PLAN.md)
-- [Benchmarks methodology](docs/BENCHMARKS.md)
+- [Benchmarks: methodology and results](docs/BENCHMARKS.md)
+- [Deploying and self-hosting](docs/DEPLOY.md)
 - [Decisions](docs/decisions/)

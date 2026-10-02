@@ -1,0 +1,39 @@
+{
+  "config": {
+    "URL": "wss://51-170-191-178.sslip.io/ws",
+    "BoardID": "wan-1790972109",
+    "Editors": 50,
+    "Ramp": 20000000000,
+    "Warmup": 10000000000,
+    "Duration": 70000000000,
+    "OpsPerSec": 1,
+    "DragShare": 0.6,
+    "CreateShare": 0.2,
+    "TextShare": 0.15,
+    "DeleteShare": 0.05,
+    "DragHz": 10,
+    "DragMin": 1000000000,
+    "DragMax": 2000000000,
+    "CursorHz": 15,
+    "Hotspot": 0.5,
+    "Area": 20000,
+    "ViewW": 1920,
+    "ViewH": 1080,
+    "ObjectsPerEditor": 3,
+    "Seed": 1
+  },
+  "summary": {
+    "editors": 50,
+    "connected": 50,
+    "failed": 0,
+    "late": 0,
+    "ops_sent": 3569,
+    "latency_samples": 31978,
+    "p50_ms": 99.647,
+    "p90_ms": 156.799,
+    "p99_ms": 229.759,
+    "p99_9_ms": 312.319,
+    "max_ms": 331.519,
+    "elapsed_s": 90.037024
+  }
+}

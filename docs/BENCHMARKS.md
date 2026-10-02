@@ -11,7 +11,7 @@ This doc defines how each engineering target is measured. Results go in `benchma
 | 4. Storage | 31.3 B/edit with full history at 1M edits | [2026-09-28-storage.md](../benchmarks/results/2026-09-28-storage.md) |
 | 5. Failover without losing edits | Covered by the W8 tests (no acknowledged edit lost on SIGKILL); the chaos run under load is not done yet | ADR-0005 |
 | 6. Timer skew | Not measured yet (a browser test checks two clients agree within 1 s, one with its clock an hour off) | – |
-| WAN latency | After deployment (Phase 5) | – |
+| WAN latency | 50 editors over the internet against the live demo (fallback Micro VM, ~62 ms round trip): p50 99.6 ms, p99 230 ms | [2026-10-02-wan.md](../benchmarks/results/2026-10-02-wan.md) |
 
 **Deviations from the method below.** The scenario is one file, [loadgen/scenarios/editors.yaml](../loadgen/scenarios/editors.yaml), with the editor count given on the command line. The loadgen's clients keep timings, not replicas. The rig has 2 cores for the loadgen, so runs above 1,000 editors were invalid by the 70% rule.
 

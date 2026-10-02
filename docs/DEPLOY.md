@@ -94,6 +94,12 @@ docker compose -f compose.yaml -f deploy/compose.prod.yaml exec backup sh /backu
   4. The whole stack was destroyed, volumes included (`down -v`).
   5. A fresh stack took 15 s to come up; the restore, including stopping and starting the nodes, took 5 s.
   6. The fingerprint afterwards was identical.
-- **On the Oracle VM:** not done yet. It is repeated after the first deploy, and the result goes here.
+- **On the live server, 2026-10-02:** the fallback Micro VM, restoring from Object Storage.
+  1. Fingerprinted two boards: `drill` (5,000 objects, seq 10) and a WAN-test board (725 objects, seq 3,619).
+  2. Backup: 221 KB, written in about 1 s and uploaded to the bucket through the write-only link.
+  3. Wiped the stack with `down -v`, after keeping a copy of the dump outside the volumes.
+  4. A fresh stack took 32 s.
+  5. Restored from the bucket through a temporary read-only link: 2 s for the restore, 12 s including stopping and starting the nodes (18 boards, 3,769 log rows).
+  6. Both fingerprints afterwards were identical.
 
 **Rebuilding after a reclaim** (Oracle may reclaim idle free VMs): `terraform apply`, which makes a new VM and a new IP. Then restore the latest backup from the bucket as above. With a DuckDNS name the address is kept; with sslip.io it changes along with the IP.
