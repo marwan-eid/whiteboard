@@ -1,0 +1,39 @@
+{
+  "config": {
+    "URL": "ws://localhost:8081/ws",
+    "BoardID": "bench",
+    "Editors": 2000,
+    "Ramp": 60000000000,
+    "Warmup": 10000000000,
+    "Duration": 310000000000,
+    "OpsPerSec": 1,
+    "DragShare": 0.6,
+    "CreateShare": 0.2,
+    "TextShare": 0.15,
+    "DeleteShare": 0.05,
+    "DragHz": 10,
+    "DragMin": 1000000000,
+    "DragMax": 2000000000,
+    "CursorHz": 15,
+    "Hotspot": 0.5,
+    "Area": 20000,
+    "ViewW": 1920,
+    "ViewH": 1080,
+    "ObjectsPerEditor": 3,
+    "Seed": 2
+  },
+  "summary": {
+    "editors": 2000,
+    "connected": 2000,
+    "failed": 0,
+    "late": 0,
+    "ops_sent": 611184,
+    "latency_samples": 243263017,
+    "p50_ms": 780.287,
+    "p90_ms": 5267.455,
+    "p99_ms": 18677.759,
+    "p99_9_ms": 38207.487,
+    "max_ms": 67108.863,
+    "elapsed_s": 372.987741671
+  }
+}

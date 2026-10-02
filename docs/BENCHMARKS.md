@@ -1,6 +1,19 @@
 # Benchmarks
 
-This doc defines how each engineering target is measured. **Nothing here is a result yet.** Results go in `benchmarks/results/YYYY-MM-DD-<name>.md`, each with the full setup record described below. A number that wasn't measured is never reported.
+This doc defines how each engineering target is measured. Results go in `benchmarks/results/YYYY-MM-DD-<name>.md`, each with the full setup record described below. A number that wasn't measured is never reported.
+
+## Results so far
+| Target | Result | Where |
+|---|---|---|
+| 1. 1,000 editors, sync p99 < 100 ms | **Not reached.** Highest count with a median p99 under 100 ms: 500 editors (58.4 ms). At 1,000 editors the median p99 was 231 ms (tick 20 ms) and 123 ms (tick 50 ms). GitHub Actions rig, loopback. | [2026-10-02-sync.md](../benchmarks/results/2026-10-02-sync.md) |
+| 2. Smooth with 100k objects | Pan p95 5.9–6.8 ms on an Intel UHD 630 laptop GPU; 42–47 ms with 4× CPU throttling. Viewport query p99 79–88 µs on the server. | [2026-10-02-browser-100k.md](../benchmarks/results/2026-10-02-browser-100k.md) |
+| 3. Offline merges | Property tests and shared vectors pass in CI (Go `rapid`, TS `fast-check`) | test suites |
+| 4. Storage | 31.3 B/edit with full history at 1M edits | [2026-09-28-storage.md](../benchmarks/results/2026-09-28-storage.md) |
+| 5. Failover without losing edits | Covered by the W8 tests (no acknowledged edit lost on SIGKILL); the chaos run under load is not done yet | ADR-0005 |
+| 6. Timer skew | Not measured yet (a browser test checks two clients agree within 1 s, one with its clock an hour off) | – |
+| WAN latency | After deployment (Phase 5) | – |
+
+**Deviations from the method below.** The scenario is one file, [loadgen/scenarios/editors.yaml](../loadgen/scenarios/editors.yaml), with the editor count given on the command line. The loadgen's clients keep timings, not replicas. The rig has 2 cores for the loadgen, so runs above 1,000 editors were invalid by the 70% rule.
 
 ## Setup record (required with every result)
 - Commit hash, Go version, browser version where relevant

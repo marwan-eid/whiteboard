@@ -1,0 +1,43 @@
+{
+  "board": "big100k-grid",
+  "renderer": "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "cpu_throttle": 4,
+  "bytes_before_first_objects": {
+    "websocket": 7512,
+    "http": 226690
+  },
+  "js_heap_mb_at_end": 206.6,
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "first_objects_ms": 1589,
+  "objects_held": {
+    "start": 72,
+    "after_pan": 123,
+    "lod": 87492
+  },
+  "frame_ms": {
+    "pan": {
+      "frames": 124,
+      "p50_ms": 7.3,
+      "p95_ms": 47.4,
+      "p99_ms": 73,
+      "max_ms": 96.8
+    },
+    "zoom_out": {
+      "frames": 6,
+      "p50_ms": 38.1,
+      "p95_ms": 514.9,
+      "p99_ms": 514.9,
+      "max_ms": 514.9
+    },
+    "lod_pan": {
+      "frames": 61,
+      "p50_ms": 1.4,
+      "p95_ms": 3.4,
+      "p99_ms": 124.6,
+      "max_ms": 124.6
+    }
+  }
+}
