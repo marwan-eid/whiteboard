@@ -68,4 +68,4 @@ At deploy time, Oracle's limits API reported this account's Always Free A1 allow
 - MilkRun stays on its AMD Micro VM, which is a separate allowance. Moving MilkRun to A1 later would mean shrinking this VM.
 - The domain is `<ip>.sslip.io`, which needs no account.
 
-The first `terraform apply` hit "Out of host capacity" for A1 in eu-amsterdam-1. As planned above, the create is retried until capacity frees up. Everything else (compartment, network, backup bucket) was created on the first try.
+The first `terraform apply` hit "Out of host capacity" for A1 in eu-amsterdam-1. Everything else (compartment, network, backup bucket) was created on the first try. The A1 create was retried every 3 minutes for about 2.5 hours (47 attempts, 2026-10-02) without success, then stopped, so as not to hammer the API. **The live demo runs on the fallback Micro VM** (`fallback_micro = true`). Moving to A1 later is one `terraform apply` with `fallback_micro = false`, then a backup and restore ([DEPLOY.md](../DEPLOY.md)).
