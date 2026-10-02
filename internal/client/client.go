@@ -350,7 +350,11 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 		return
 	}
 	c.moves = 0
-	d, err := doc.FromSnapshot(w.GetObjects())
+	snapshot := w.GetObjects()
+	if c.cfg.StampsOnly {
+		snapshot = nil // no replica of what others made (see Config.StampsOnly)
+	}
+	d, err := doc.FromSnapshot(snapshot)
 	if err != nil {
 		ws.CloseNow()
 		return

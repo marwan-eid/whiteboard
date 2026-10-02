@@ -107,6 +107,8 @@ func run() int {
 	var cpuprofile string
 	flag.StringVar(&hlog, "hlog", "", "also write the latency histogram (HdrHistogram log, microseconds) to this file")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write a CPU profile of the load generator to this file")
+	var memprofile string
+	flag.StringVar(&memprofile, "memprofile", "", "write a heap profile of the load generator, at the end of the run, to this file")
 	flag.Parse()
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
@@ -126,6 +128,12 @@ func run() int {
 
 	started := time.Now()
 	res := loadgen.Run(ctx, cfg)
+	if memprofile != "" {
+		if f, err := os.Create(memprofile); err == nil {
+			_ = pprof.WriteHeapProfile(f)
+			_ = f.Close()
+		}
+	}
 	s := res.Summarize()
 	fmt.Printf("editors: %d connected, %d failed; %d ops sent in %.1fs\n", s.Connected, s.Failed, s.OpsSent, s.ElapsedS)
 	if s.Late > 0 {

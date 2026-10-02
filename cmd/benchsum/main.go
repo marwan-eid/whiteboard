@@ -40,6 +40,7 @@ type row struct {
 	loadgenCPU          float64 // percent of its 2 cores
 	nodeCPU, pgCPU      float64 // mean docker stats CPU %, 100 = one core
 	nodeMem             string  // last sample
+	loadgenMem          string  // max RSS
 	kicked              float64 // slow consumers kicked
 	cpuModel            string
 	invalid, incomplete string
@@ -66,13 +67,13 @@ func main() {
 		return a.run - b.run
 	})
 
-	fmt.Println("| Editors | Run | p50 ms | p90 ms | p99 ms | p99.9 ms | max ms | Samples | Ops sent | Node CPU | Postgres CPU | Node memory | Slow clients kicked | Loadgen CPU | CPU | Notes |")
-	fmt.Println("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Println("| Editors | Run | p50 ms | p90 ms | p99 ms | p99.9 ms | max ms | Samples | Ops sent | Node CPU | Postgres CPU | Node memory | Slow clients kicked | Loadgen CPU | Loadgen memory | CPU | Notes |")
+	fmt.Println("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range rows {
 		notes := strings.TrimSpace(r.invalid + " " + r.incomplete)
-		fmt.Printf("| %d | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %d | %d | %.0f%% | %.0f%% | %s | %.0f | %.0f%% | %s | %s |\n",
+		fmt.Printf("| %d | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %d | %d | %.0f%% | %.0f%% | %s | %.0f | %.0f%% | %s | %s | %s |\n",
 			r.s.Editors, r.run, r.s.P50, r.s.P90, r.s.P99, r.s.P999, r.s.Max, r.s.Samples, r.s.OpsSent,
-			r.nodeCPU, r.pgCPU, r.nodeMem, r.kicked, r.loadgenCPU, r.cpuModel, notes)
+			r.nodeCPU, r.pgCPU, r.nodeMem, r.kicked, r.loadgenCPU, r.loadgenMem, r.cpuModel, notes)
 	}
 
 	fmt.Println()
@@ -126,8 +127,14 @@ func read(dir string) (row, bool) {
 	}
 
 	if t, err := os.ReadFile(filepath.Join(dir, "time.txt")); err == nil {
-		// /usr/bin/time -f '%e %U %S': elapsed, user, system seconds.
+		// /usr/bin/time -f '%e %U %S %M': elapsed, user, system seconds, max RSS KB.
 		f := strings.Fields(lastLine(string(t)))
+		if len(f) == 4 {
+			if kb, err := strconv.ParseFloat(f[3], 64); err == nil {
+				r.loadgenMem = fmt.Sprintf("%.0fMiB", kb/1024)
+			}
+			f = f[:3]
+		}
 		if len(f) == 3 {
 			e, _ := strconv.ParseFloat(f[0], 64)
 			u, _ := strconv.ParseFloat(f[1], 64)

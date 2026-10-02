@@ -45,7 +45,7 @@ jobs:
             echo "runner: $RUNNER_NAME ($ImageOS $ImageVersion)"
             echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}"
             echo "server: 1 node + Postgres on cores 0-1 (deploy/compose.bench.yaml); loadgen on cores 2-3"
-            echo "loadgen: GOGC=400, clients keep no replicas (client.Config.StampsOnly)"
+            echo "loadgen: GOGC=400 GOMEMLIMIT=10GiB, clients keep no replicas (client.Config.StampsOnly)"
             echo "--- lscpu"; lscpu
             echo "--- free -m"; free -m
             echo "--- docker"; docker version --format '{{.Server.Version}}'
@@ -74,8 +74,9 @@ jobs:
           ( sleep 120; curl -s -o "$OUT/node-cpu.pprof" "localhost:8081/debug/pprof/profile?seconds=30" ) &
           # The loadgen has memory to spare; less GC leaves more CPU for the simulated clients.
           export GOGC=400
+          export GOMEMLIMIT=10GiB # the runner has 16 GB; collect harder before it runs out
           status=0
-          /usr/bin/time -f '%e %U %S' -o "$OUT/time.txt" taskset -c 2,3 bin/loadgen \
+          /usr/bin/time -f '%e %U %S %M' -o "$OUT/time.txt" taskset -c 2,3 bin/loadgen \
             -scenario loadgen/scenarios/editors.yaml -editors ${{ matrix.editors }} -duration ${{ inputs.duration }} \
             -url ws://localhost:8081/ws -board bench -seed ${{ matrix.run }} \
             -json "$OUT/loadgen.json" -hlog "$OUT/latency.hlog" 2>&1 | tee "$OUT/loadgen.log" || status=$?
