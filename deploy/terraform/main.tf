@@ -249,7 +249,7 @@ resource "oci_core_instance" "fallback" {
     ssh_authorized_keys = file(var.ssh_public_key_path)
     user_data = base64encode(templatefile("${path.module}/cloud-init.sh", merge(local.setup, {
       compose_files = "-f compose.yaml -f deploy/compose.prod.yaml -f deploy/compose.small.yaml"
-      services      = "postgres node-1 web backup"
+      services      = "postgres node-1 node-2 web backup"
       swap_gb       = 2
     })))
   }

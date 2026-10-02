@@ -46,7 +46,7 @@ Within the Always Free limits this costs $0. Do not upgrade the account to Pay-A
    terraform apply
    ```
 
-   If A1 capacity is unavailable (`Out of host capacity`), run `terraform apply` again later; this is common in busy regions. Don't retry in a tight loop. Meanwhile, `fallback_micro = true` in `terraform.tfvars` runs a reduced demo (one stack, no Prometheus or Grafana) on a free AMD Micro VM instead, as the live demo does.
+   If A1 capacity is unavailable (`Out of host capacity`), run `terraform apply` again later; this is common in busy regions. Don't retry in a tight loop. Meanwhile, `fallback_micro = true` in `terraform.tfvars` runs a reduced demo (small Postgres, no Prometheus or Grafana) on a free AMD Micro VM instead, as the live demo does.
 5. **Wait about 5 minutes.** First boot installs Docker, pulls the images from GHCR and starts the stack. Progress is in `/var/log/whiteboard-setup.log` on the VM. Then open the `url` output.
 
 **What runs:**

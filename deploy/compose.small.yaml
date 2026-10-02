@@ -1,8 +1,9 @@
 # A small machine (the free AMD Micro VM: 1 GB RAM, 1/8 OCPU), on top of
 # deploy/compose.prod.yaml. Start only the core services:
 #   docker compose -f compose.yaml -f deploy/compose.prod.yaml -f deploy/compose.small.yaml \
-#     up -d postgres node-1 web backup
-# One node (no failover), and no Prometheus or Grafana; the live stats panel
+#     up -d postgres node-1 node-2 web backup
+# Both nodes (Caddy depends on them, and failover still works; an idle node
+# uses about 10 MB), but no Prometheus or Grafana; the live stats panel
 # still works, since it reads the node itself (ADR-0006, "Free-only risk handling").
 services:
   postgres:
@@ -10,4 +11,7 @@ services:
   node-1:
     environment:
       # Leave room for Postgres and Caddy; the Go runtime collects harder near this.
+      GOMEMLIMIT: 300MiB
+  node-2:
+    environment:
       GOMEMLIMIT: 300MiB

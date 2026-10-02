@@ -50,7 +50,7 @@ If MilkRun ends up needing 2 OCPU / 12 GB, the whiteboard VM shrinks to 2 OCPU /
 **Load tests do not run on Oracle.** They run on GitHub Actions (see BENCHMARKS.md), so they never compete with the demo or MilkRun for the free allowance.
 
 ## Free-only risk handling
-- **A1 capacity unavailable in the home region:** keep retrying the create (a common, known workaround). Meanwhile, run a reduced demo on the second free AMD Micro VM, which Oracle allows alongside MilkRun's: 1 node, Postgres with small buffers, Caddy, and no Prometheus or Grafana. The public metrics panel still works, because it reads from the node itself.
+- **A1 capacity unavailable in the home region:** keep retrying the create (a common, known workaround). Meanwhile, run a reduced demo on the second free AMD Micro VM, which Oracle allows alongside MilkRun's: Postgres with small buffers, Caddy, and no Prometheus or Grafana. (Planned with 1 node; as deployed it runs both, because Caddy depends on them, and an idle node costs about 10 MB.) The public metrics panel still works, because it reads from the node itself.
 - **Idle reclamation:** Always Free A1 instances can be reclaimed if their CPU, network, and memory use all stay low for 7 days. We stay on the free account (no Pay-As-You-Go upgrade, so nothing can be billed). Mitigation: everything is infrastructure as code with nightly backups. A reclaimed VM is rebuilt with `terraform apply` plus a restore from backup, and the restore drill is timed and documented.
 - **Out of free resources:** cut, in this order:
   1. Grafana (use Prometheus's own UI instead)
