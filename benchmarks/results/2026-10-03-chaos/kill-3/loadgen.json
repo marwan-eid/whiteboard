@@ -1,0 +1,40 @@
+{
+  "config": {
+    "URL": "ws://localhost:8080/ws",
+    "BoardID": "chaos",
+    "Editors": 250,
+    "Ramp": 30000000000,
+    "Warmup": 10000000000,
+    "Duration": 210000000000,
+    "OpsPerSec": 1,
+    "DragShare": 0.6,
+    "CreateShare": 0.2,
+    "TextShare": 0.15,
+    "DeleteShare": 0.05,
+    "DragHz": 10,
+    "DragMin": 1000000000,
+    "DragMax": 2000000000,
+    "CursorHz": 15,
+    "Hotspot": 0.5,
+    "Area": 20000,
+    "ViewW": 1920,
+    "ViewH": 1080,
+    "ObjectsPerEditor": 3,
+    "Seed": 3,
+    "Timeline": {}
+  },
+  "summary": {
+    "editors": 250,
+    "connected": 250,
+    "failed": 0,
+    "late": 0,
+    "ops_sent": 55300,
+    "latency_samples": 2894245,
+    "p50_ms": 15.375,
+    "p90_ms": 41.663,
+    "p99_ms": 4390.911,
+    "p99_9_ms": 6381.567,
+    "max_ms": 6651.903,
+    "elapsed_s": 240.06682093
+  }
+}

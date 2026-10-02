@@ -57,6 +57,13 @@ export interface ConnectionOptions {
   /** The URL of a node, after the server answers Moved. Default: /n/{node}/ws on url's host. */
   nodeUrl?: (node: string) => string;
   pingIntervalMs?: number;
+  /**
+   * Drop the connection when nothing arrives for this long once welcomed
+   * (pings every pingIntervalMs keep it busy), or before the Welcome, so a
+   * frozen server is left behind instead of waited on.
+   */
+  livenessMs?: number;
+  handshakeMs?: number;
   createSocket?: (url: string) => SocketLike;
   /** Monotonic clock in ms, used for RTT. */
   now?: () => number;
@@ -92,11 +99,14 @@ export class Connection {
   /** Bumped on every open, so a route lookup that lost a race is ignored. */
   private generation = 0;
   private pingTimer: ReturnType<typeof setInterval> | undefined;
+  private watchdog: ReturnType<typeof setInterval> | undefined;
   private _state: ConnectionState = { status: "connecting", attempt: 0 };
 
   constructor(opts: ConnectionOptions) {
     this.opts = {
       pingIntervalMs: 2_000,
+      livenessMs: 6_000,
+      handshakeMs: 15_000,
       createSocket: (url) => new WebSocket(url),
       now: () => performance.now(),
       wallNow: () => Date.now(),
@@ -206,11 +216,13 @@ export class Connection {
     this.socket = socket;
     this.welcomed = false;
     let rejectedReason: string | null = null;
+    let lastMessage = this.opts.now();
 
     socket.onopen = () => socket.send(encodeHello(this.opts.boardId, this.opts.clientId, this.opts.viewport(), this.opts.credentials()));
 
     socket.onmessage = (ev) => {
       if (!(ev.data instanceof ArrayBuffer)) return;
+      lastMessage = this.opts.now();
       const msg = decodeServerMessage(ev.data).msg;
       switch (msg.case) {
         case "welcome":
@@ -247,7 +259,7 @@ export class Connection {
       }
     };
 
-    socket.onclose = () => {
+    const onClose = () => {
       if (this.socket !== socket) return;
       this.teardownSocket();
       if (this.stopped) return;
@@ -265,6 +277,13 @@ export class Connection {
       this.setState({ status: "reconnecting", attempt: this.attempt, retryInMs });
       this.retryTimer = setTimeout(() => this.open(), retryInMs);
     };
+    socket.onclose = onClose;
+
+    clearInterval(this.watchdog);
+    this.watchdog = setInterval(() => {
+      const limit = this.welcomed ? this.opts.livenessMs : this.opts.handshakeMs;
+      if (this.socket === socket && this.opts.now() - lastMessage > limit) onClose(); // also closes the socket
+    }, 1_000);
   }
 
   private startPinging(socket: SocketLike): void {
@@ -276,6 +295,7 @@ export class Connection {
 
   private teardownSocket(): void {
     clearInterval(this.pingTimer);
+    clearInterval(this.watchdog);
     const socket = this.socket;
     const wasWelcomed = this.welcomed;
     this.socket = null;

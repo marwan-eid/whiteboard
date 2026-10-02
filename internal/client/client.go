@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -46,6 +47,10 @@ type Config struct {
 	// tracking their cursors); frames still go to OnFrame. For load
 	// generation, where only timings matter and the replica is pure cost.
 	StampsOnly bool
+	// Liveness, if set, sends a ping every 2 s and drops the connection when
+	// nothing arrives for this long, so a frozen server (paused, or cut off
+	// with the TCP connection still open) is noticed and the client moves on.
+	Liveness time.Duration
 }
 
 // ErrOffline is returned when an operation needs a connection the client doesn't have.
@@ -196,8 +201,35 @@ func (c *Client) dial(ctx context.Context) error {
 	c.conn = ws
 	c.connects++
 	c.mu.Unlock()
-	go c.readLoop(ws)
+	var last atomic.Int64
+	last.Store(time.Now().UnixNano())
+	go c.readLoop(ws, &last)
+	if c.cfg.Liveness > 0 {
+		go c.watch(ws, &last)
+	}
 	return nil
+}
+
+// watch pings the server and closes ws if it goes quiet (Config.Liveness).
+func (c *Client) watch(ws *websocket.Conn, last *atomic.Int64) {
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		c.mu.Lock()
+		current := c.conn == ws
+		c.mu.Unlock()
+		if !current {
+			return
+		}
+		if time.Since(time.Unix(0, last.Load())) > c.cfg.Liveness {
+			c.trace("no message for %v: reconnecting", c.cfg.Liveness)
+			ws.CloseNow()
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_ = write(ctx, ws, &pb.ClientMessage{Msg: &pb.ClientMessage_TimePing{TimePing: &pb.TimePing{T0: float64(time.Now().UnixMilli())}}})
+		cancel()
+	}
 }
 
 // Offline drops the connection and stays disconnected until Connect;
@@ -267,13 +299,14 @@ func (c *Client) sendLocked(b *pb.OpBatch) {
 	_ = write(ctx, c.conn, &pb.ClientMessage{Msg: &pb.ClientMessage_OpBatch{OpBatch: b}})
 }
 
-func (c *Client) readLoop(ws *websocket.Conn) {
+func (c *Client) readLoop(ws *websocket.Conn, last *atomic.Int64) {
 	for {
 		_, data, err := ws.Read(context.Background())
 		if err != nil {
 			c.onDisconnect(ws)
 			return
 		}
+		last.Store(time.Now().UnixNano())
 		var msg pb.ServerMessage
 		if err := proto.Unmarshal(data, &msg); err != nil {
 			ws.CloseNow()

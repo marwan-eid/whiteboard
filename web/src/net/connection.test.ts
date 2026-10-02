@@ -290,6 +290,31 @@ describe("Connection", () => {
     routed.stop();
   });
 
+  it("leaves a server that goes silent, after the welcome or during the handshake", () => {
+    conn.start();
+    latest().serverOpen();
+    latest().serverSend(welcome("node-1"));
+    // Pings go out, but nothing comes back: a frozen server.
+    for (let i = 0; i < 5; i++) {
+      clock += 1_000;
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(conn.state.status).toBe("connected");
+    for (let i = 0; i < 3; i++) {
+      clock += 1_000;
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(sockets[0]!.closed).toBe(true);
+    expect(conn.state.status).not.toBe("connected");
+
+    vi.advanceTimersByTime(60_000); // the retry opens a new socket, which never gets a welcome
+    expect(sockets).toHaveLength(2);
+    latest().serverOpen();
+    clock += 16_000;
+    vi.advanceTimersByTime(1_000);
+    expect(sockets[1]!.closed).toBe(true);
+  });
+
   it("stop() closes the socket and cancels pending retries", () => {
     conn.start();
     latest().serverClose();

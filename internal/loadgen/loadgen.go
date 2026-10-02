@@ -203,6 +203,8 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 		URL: cfg.URL, BoardID: cfg.BoardID, Reconnect: true, Viewport: view,
 		// Only timings matter here; keeping replicas would load the generator, not the server.
 		StampsOnly: true,
+		// Notice a frozen node within about a lease period, as the web client does.
+		Liveness: 6 * time.Second,
 		OnFrame: func(f *pb.Frame) {
 			now := time.Now()
 			var samples []int64
