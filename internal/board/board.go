@@ -67,9 +67,11 @@ type Config struct {
 	Tick time.Duration
 	// A board with more than BusyFrom clients ticks more slowly, reaching
 	// TickMax at twice BusyFrom: fewer, larger frames per client, so less
-	// per-frame work when one board is very busy. A 50 ms tick took the
-	// 1,000-editor p99 from 231 to 123 ms in W9, but slows small boards, so it
-	// only applies to big ones. TickMax <= Tick turns this off.
+	// per-frame work when one board is very busy. Measured on the same runners
+	// (benchmarks/results/2026-10-03-adaptive-tick.md), 50 ms instead of 20 ms
+	// cut the 1,000-editor p99 by 12% and node CPU by 30%, but cost the
+	// 500-editor runs a few ms, so it starts above 500. TickMax <= Tick turns
+	// this off.
 	TickMax  time.Duration
 	BusyFrom int
 	// MaxSkew is how far ahead of server time a client stamp may be before
@@ -108,7 +110,7 @@ func (c *Config) setDefaults() {
 		c.TickMax = 50 * time.Millisecond
 	}
 	if c.BusyFrom == 0 {
-		c.BusyFrom = 400
+		c.BusyFrom = 500
 	}
 	if c.MaxSkew == 0 {
 		c.MaxSkew = 2 * time.Second

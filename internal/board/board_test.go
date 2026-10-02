@@ -749,8 +749,8 @@ func TestSnapshotsWaitForMinInterval(t *testing.T) {
 }
 
 func TestTickSlowsOnlyForBusyBoards(t *testing.T) {
-	b := &Board{cfg: Config{Tick: 20 * time.Millisecond, TickMax: 50 * time.Millisecond, BusyFrom: 400}, clients: map[uint64]*clientState{}}
-	for n, want := range map[int]time.Duration{0: 20, 400: 20, 600: 35, 800: 50, 2000: 50} {
+	b := &Board{cfg: Config{Tick: 20 * time.Millisecond, TickMax: 50 * time.Millisecond, BusyFrom: 500}, clients: map[uint64]*clientState{}}
+	for n, want := range map[int]time.Duration{0: 20, 500: 20, 750: 35, 1000: 50, 2000: 50} {
 		clear(b.clients)
 		for i := range n {
 			b.clients[uint64(i)] = nil

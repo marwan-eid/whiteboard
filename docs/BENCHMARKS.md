@@ -5,7 +5,7 @@ This doc defines how each engineering target is measured. Results go in `benchma
 ## Results so far
 | Target | Result | Where |
 |---|---|---|
-| 1. 1,000 editors, sync p99 < 100 ms | **Not reached.** Highest count with a median p99 under 100 ms: 500 editors (58.4 ms). At 1,000 editors the median p99 was 231 ms (tick 20 ms) and 123 ms (tick 50 ms). GitHub Actions rig, loopback. | [2026-10-02-sync.md](../benchmarks/results/2026-10-02-sync.md) |
+| 1. 1,000 editors, sync p99 < 100 ms | **Not reached.** Highest count with a median p99 under 100 ms: 500 editors (58.4 ms). At 1,000 editors the median p99 was 231 ms (tick 20 ms). Measured in pairs on the same runners, a 50 ms tick for busy boards gave 189 ms against 215 ms. GitHub Actions rig, loopback. | [2026-10-02-sync.md](../benchmarks/results/2026-10-02-sync.md), [2026-10-03-adaptive-tick.md](../benchmarks/results/2026-10-03-adaptive-tick.md) |
 | 2. Smooth with 100k objects | Pan p95 5.9–6.8 ms on an Intel UHD 630 laptop GPU; 42–47 ms with 4× CPU throttling. Viewport query p99 79–88 µs on the server. | [2026-10-02-browser-100k.md](../benchmarks/results/2026-10-02-browser-100k.md) |
 | 3. Offline merges | Property tests and shared vectors pass in CI (Go `rapid`, TS `fast-check`) | test suites |
 | 4. Storage | 31.3 B/edit with full history at 1M edits | [2026-09-28-storage.md](../benchmarks/results/2026-09-28-storage.md) |

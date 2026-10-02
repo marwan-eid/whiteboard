@@ -109,7 +109,7 @@ Latency is measured inside one process, from the sender writing an edit until an
 | 500 | 58.4 ms |
 | 1,000 | 231 ms |
 
-**The 1,000-editor target (p99 under 100 ms) was not reached.** With half of 1,000 people in one view, every edit goes to about 500 receivers, and every client gets a frame each tick. On two cores, the per-frame socket writes and the scheduling of 1,000 writer goroutines produce a tail. A 50 ms tick brought p99 to 123 ms, at the cost of a slower median.
+**The 1,000-editor target (p99 under 100 ms) was not reached.** With half of 1,000 people in one view, every edit goes to about 500 receivers, and every client gets a frame each tick. On two cores, the per-frame socket writes and the scheduling of 1,000 writer goroutines produce a tail. Busy boards now tick more slowly (50 ms at 1,000 clients): measured in pairs on the same runners, that cut p99 from 215 to 189 ms, at the cost of a slower median. An earlier 123 ms with that tick came from comparing different runners, whose disks differ a lot, and did not replicate ([results](../benchmarks/results/2026-10-03-adaptive-tick.md)).
 
 **What profiling fixed along the way:**
 - **Nearest cursors** are now computed once per view and shared, instead of once per client. They had been the largest part of frame building.

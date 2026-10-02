@@ -26,7 +26,7 @@ const (
 	// spawning workers would cost more than it saves.
 	minClientsPerWorker = 32
 	// presenceEvery ticks (20 ms each) cursors are sent: about 16 Hz, the
-	// rate clients send them at.
+	// rate clients send them at; about 7 Hz on a busy board at a 50 ms tick.
 	presenceEvery = 3
 )
 

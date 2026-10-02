@@ -16,5 +16,5 @@ services:
       MAX_CONNS_PER_IP: "0"
       # Board tick (20ms by default); the bench workflow can vary it.
       TICK: ${TICK:-20ms}
-      # Tick of a very busy board (adaptive above 400 clients); 20ms turns it off.
+      # Tick of a very busy board (adaptive above 500 clients); 20ms turns it off.
       TICK_MAX: ${TICK_MAX:-50ms}

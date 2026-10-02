@@ -49,7 +49,7 @@ flowchart LR
 | WebSocket gateway | Handshake and auth. One reader and one writer goroutine per connection. Bounded send queues. |
 | Router and lease manager | Node heartbeats. Rendezvous placement. Acquiring and renewing board leases. The `/route` API. |
 | Board actor | The single writer for one board. Keeps objects and a spatial grid in memory. Assigns `seq`. Runs the tick loop. |
-| Persistence | Group commit per tick. Snapshots every 5k ops or 10 minutes. Compacts ops into segments. |
+| Persistence | Group commit per tick. Snapshots every 5k ops (at most once a minute) or 10 minutes. Compacts ops into segments. |
 | Stats | Prometheus metrics, plus a public stats stream for the live metrics panel. |
 | Loadgen | Simulated editors that speak the real protocol. Records latency histograms. |
 
@@ -184,6 +184,7 @@ sequenceDiagram
 - **Parallel fan-out:** frames are independent per client, so with 32 or more clients they are built by a pool of worker goroutines while the actor waits ([internal/board/fanout.go](../internal/board/fanout.go)). Workers only read board state; kicking a slow client happens afterwards, on the actor.
 - **Backpressure:** each connection has a bounded send queue (256 messages). A client that overflows it is closed with WebSocket code 1013 ("try again later"). It then reconnects and gets a fresh snapshot, so one slow client never stalls the board. Incoming traffic is throttled differently: a client whose batches fill the board's inbox is blocked on its own socket, not dropped.
 - **Commit before broadcast:** each tick, the board appends that tick's batches with one `COPY`, then sends acks and frames. An edit becomes visible to others only after it is durable.
+- **Busy boards tick more slowly:** above 500 clients the tick lengthens linearly, reaching 50 ms at 1,000 (`Config.TickMax`, `BusyFrom`; setting `TICK_MAX`). Fewer, larger frames per client cut socket writes: in paired runs, p99 at 1,000 editors fell 12% and node CPU 30%, while p50 rose about 16 ms ([results](../benchmarks/results/2026-10-03-adaptive-tick.md)).
 - **Crash-only failure:** if a commit fails, the board kicks every client (close code 1013) and unloads. Uncommitted batches were never acked, so their clients resend them to the reloaded board.
 - **Load and snapshots:** a board loads from its latest snapshot plus the log after it. That rebuilds objects, `seq`, each client's last `clientSeq`, and the HLC. Snapshots are written every 5,000 batches (in the background, from a copy), when an idle board unloads, and on shutdown.
 - **Tests:** [internal/client/client_test.go](../internal/client/client_test.go) crashes boards repeatedly during randomized editing, and [test/e2e/kill_test.go](../test/e2e/kill_test.go) SIGKILLs the real node mid-edit. Both check that every acked batch is in the log and that all replicas converge.
@@ -211,7 +212,7 @@ sequenceDiagram
 - **Client side:** each client sends at most 15 Hz. The throttle always sends the latest position last.
 - **Gateway:** drops cursor messages that arrive less than 40 ms after the previous one from the same connection.
 - **Board:** cursor updates skip the actor's inbox. Connection goroutines write the latest position per client into a small mutex-guarded map, so presence traffic can never delay edits. Moves from clients no longer on the board are dropped, so a late cursor message can't leave a ghost behind.
-- **Every 3rd tick (about 16 Hz):** each client gets the **30 nearest** cursors in its viewport, found through a grid of cursor positions. It receives positions that moved or newly entered its selection, and `gone` for ones that left. `Frame.online` carries the total count.
+- **Every 3rd tick (about 16 Hz; about 7 Hz on a board ticking at 50 ms):** each client gets the **30 nearest** cursors in its viewport, found through a grid of cursor positions. It receives positions that moved or newly entered its selection, and `gone` for ones that left. `Frame.online` carries the total count.
 - **Why not every tick:** a profile under 200 editors showed presence on every tick taking about 30% of CPU, all on the board actor ([local pre-check](../benchmarks/results/2026-09-27-local-w4.md)).
 
 ### 3.4 Reconnect and offline
