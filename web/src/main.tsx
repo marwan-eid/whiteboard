@@ -22,6 +22,7 @@ import { BoardMenu } from "./ui/BoardMenu";
 import { HistoryPanel } from "./ui/HistoryPanel";
 import { StatusBadge } from "./ui/StatusBadge";
 import { TimerWidget } from "./ui/TimerWidget";
+import { VotePanel } from "./ui/VotePanel";
 import { Toolbar } from "./ui/Toolbar";
 
 const boardId = boardIdFromPath(location.pathname);
@@ -86,6 +87,14 @@ connection.start();
 const history = new History(sync);
 const center = () => ({ x: stageHost.clientWidth / 2, y: stageHost.clientHeight / 2 });
 
+// Vote dots to draw on shapes; the overlay starts asynchronously, so keep the latest.
+let badges: ReadonlyMap<string, number> = new Map();
+let overlayRef: Overlay | null = null;
+const onBadges = (b: ReadonlyMap<string, number>) => {
+  badges = b;
+  overlayRef?.setBadges(b);
+};
+
 function renderUI(): void {
   render(
     <>
@@ -94,6 +103,7 @@ function renderUI(): void {
       <HistoryPanel view={historyView} canRestore={role !== Role.VIEWER} />
       <BoardMenu api={api} boardId={boardId} role={role} />
       <TimerWidget session={sync} now={() => connection.serverNow()} canEdit={role !== Role.VIEWER} />
+      <VotePanel session={sync} editor={editor} canEdit={role !== Role.VIEWER} onBadges={onBadges} />
     </>,
     uiHost,
   );
@@ -109,6 +119,8 @@ createStage(stageHost, camera)
     scene.setLOD(viewport.lod);
     viewport.subscribe((v) => scene.setLOD(v.lod));
     const overlay = new Overlay(scene, editor, camera, presence, frames);
+    overlayRef = overlay;
+    overlay.setBadges(badges);
     app.stage.addChild(scene.world, overlay.layer);
     const textEditor = new TextEditor(uiHost, sync, history, camera, editor);
     new Controller({ canvas: app.canvas, session: sync, history, scene, overlay, editor, camera, presence, textEditor });

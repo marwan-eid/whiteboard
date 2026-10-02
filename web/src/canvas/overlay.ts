@@ -9,6 +9,7 @@ import type { Scene } from "./scene";
 
 const ACCENT = 0x0969da;
 const HANDLE = 8;
+const BADGE = 0xbf3989;
 
 export type ResizeDir = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
@@ -37,6 +38,9 @@ export class Overlay {
   private readonly g = new Graphics();
   private readonly cursorLayer = new Container();
   private readonly cursorViews = new Map<number, { g: Graphics; label: Container }>();
+  private readonly badgeLayer = new Container();
+  private readonly badgeViews: { view: Container; g: Graphics; t: Text }[] = [];
+  private badges: ReadonlyMap<string, number> = new Map();
   private dirty = false;
 
   marquee: Rect | null = null;
@@ -49,7 +53,7 @@ export class Overlay {
     private readonly presence: Presence,
     private readonly frames: FrameScheduler,
   ) {
-    this.layer.addChild(this.g, this.cursorLayer);
+    this.layer.addChild(this.g, this.badgeLayer, this.cursorLayer);
     frames.beforeRender(() => {
       if (!this.dirty) return;
       this.dirty = false;
@@ -63,6 +67,12 @@ export class Overlay {
   invalidate(): void {
     this.dirty = true;
     this.frames.request();
+  }
+
+  /** Dot counts to show on shapes (votes); empty for none. */
+  setBadges(badges: ReadonlyMap<string, number>): void {
+    this.badges = badges;
+    this.invalidate();
   }
 
   /** The handle under a screen point, if any. */
@@ -126,7 +136,33 @@ export class Overlay {
       for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
       g.stroke({ width: 3 * this.camera.zoom, color: 0x1f2328, cap: "round", join: "round" });
     }
+    this.drawBadges();
     this.drawCursors();
+  }
+
+  private drawBadges(): void {
+    let n = 0;
+    for (const [id, count] of this.badges) {
+      const geom = count > 0 ? this.scene.geometryOf(id) : null;
+      if (!geom) continue;
+      let b = this.badgeViews[n];
+      if (!b) {
+        const g = new Graphics().circle(0, 0, 11).fill(BADGE).stroke({ width: 1.5, color: 0xffffff });
+        const t = new Text({ text: "", style: { fontSize: 12, fontWeight: "600", fill: 0xffffff, fontFamily: "system-ui, sans-serif" } });
+        t.anchor.set(0.5);
+        const view = new Container();
+        view.addChild(g, t);
+        this.badgeLayer.addChild(view);
+        b = { view, g, t };
+        this.badgeViews.push(b);
+      }
+      const r = this.screenRect(geom.bounds);
+      b.view.position.set(r.x + r.w, r.y);
+      b.t.text = String(count);
+      b.view.visible = true;
+      n++;
+    }
+    for (let i = n; i < this.badgeViews.length; i++) this.badgeViews[i]!.view.visible = false;
   }
 
   private drawCursors(): void {

@@ -278,9 +278,11 @@ sequenceDiagram
 - **Measured quality:** timer skew under load is measured in BENCHMARKS.md (not yet run).
 
 ### 3.8 Voting
-- **Session:** the board owner starts a session: `{sessionId, votesPerUser, anonymous, endsAt}`.
-- **Casting:** votes are ops of the form `Vote{sessionId, objectId, delta}`.
-- **Results:** tallies are hidden until the session ends or the owner reveals them.
+Dot voting, built in W7 on board-wide objects (3.7):
+- **Session:** the `_vote` object holds the session id (in `text`), the dots each person gets (`votes_per_user`, 1–20) and `closed`. Any editor can start a session or end it.
+- **Casting:** each client writes only its own ballot, `_ballot:<client id>`: the session id and the voted-for object ids, one entry per dot. A whole ballot is one value, so placing or taking back a dot is one write with no conflicts between voters. The server checks a ballot against the open session: the right session id, at most `votes_per_user` dots, well-formed shape ids (not that the shapes exist; results skip missing ones). Ballots from earlier sessions are ignored, so a new session starts from zero.
+- **Results:** ending the session shows the totals to everyone, as a ranked list and as counts on the shapes; deleted shapes drop out. While it is open, the UI shows each person only their own dots. That is not secret: every client receives every ballot. Hiding votes from clients would need per-client filtering on the server.
+- **Limits:** a person with two tabs has two client ids, so two ballots. Votes are per client, not per person.
 
 ### 3.9 Auth, permissions, abuse
 Built in W6 (`internal/access`, `internal/ratelimit`).
