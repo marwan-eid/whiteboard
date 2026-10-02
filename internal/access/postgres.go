@@ -10,22 +10,39 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/ratelimit"
 )
 
 // Postgres stores board ownership and share links.
-type Postgres struct{ pool *pgxpool.Pool }
+type Postgres struct {
+	pool *pgxpool.Pool
+	// newBoards, if set, limits public boards created per client IP by
+	// visiting unknown ids (see LimitNewBoards).
+	newBoards *ratelimit.Keyed
+}
 
 var _ Authorizer = (*Postgres)(nil)
 
 func NewPostgres(pool *pgxpool.Pool) *Postgres { return &Postgres{pool: pool} }
 
+// LimitNewBoards caps how many public boards one address creates by visiting
+// unknown ids; joining existing boards is not limited.
+func (s *Postgres) LimitNewBoards(l *ratelimit.Keyed) *Postgres {
+	s.newBoards = l
+	return s
+}
+
 // Authorize applies the access rules. Visiting an unknown board id creates
 // it as a public board, as before W6.
-func (s *Postgres) Authorize(ctx context.Context, boardID, guestID, shareToken string) (Grant, error) {
+func (s *Postgres) Authorize(ctx context.Context, req Request) (Grant, error) {
+	boardID, guestID, shareToken := req.BoardID, req.GuestID, req.ShareToken
 	var visibility string
 	var owner *string
 	err := s.pool.QueryRow(ctx, "SELECT visibility, owner_id FROM boards WHERE id = $1", boardID).Scan(&visibility, &owner)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if s.newBoards != nil && !s.newBoards.Allow(req.ClientIP) {
+			return Grant{}, ErrTooManyBoards
+		}
 		if _, err := s.pool.Exec(ctx, "INSERT INTO boards (id) VALUES ($1) ON CONFLICT DO NOTHING", boardID); err != nil {
 			return Grant{}, err
 		}

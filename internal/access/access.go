@@ -27,6 +27,8 @@ var (
 	ErrNotOwner = errors.New("not the board owner")
 	// ErrNotFound: no such board or link.
 	ErrNotFound = errors.New("not found")
+	// ErrTooManyBoards: this address created too many boards recently.
+	ErrTooManyBoards = errors.New("too many new boards from this address")
 )
 
 // Grant is what a connection may do on a board.
@@ -40,15 +42,24 @@ type Grant struct {
 // CanEdit reports whether the grant allows changing the board.
 func (g Grant) CanEdit() bool { return g.Role >= pb.Role_ROLE_EDITOR }
 
+// Request is who wants to join which board.
+type Request struct {
+	BoardID    string
+	GuestID    string // verified guest id, or empty
+	ShareToken string
+	// ClientIP limits how many boards one address can create by visiting new ids.
+	ClientIP string
+}
+
 // Authorizer decides access when a client joins a board.
 type Authorizer interface {
-	Authorize(ctx context.Context, boardID, guestID, shareToken string) (Grant, error)
+	Authorize(ctx context.Context, req Request) (Grant, error)
 }
 
 // Open lets everyone edit every board (tests and single-user setups).
 type Open struct{}
 
-func (Open) Authorize(context.Context, string, string, string) (Grant, error) {
+func (Open) Authorize(context.Context, Request) (Grant, error) {
 	return Grant{Role: pb.Role_ROLE_EDITOR}, nil
 }
 

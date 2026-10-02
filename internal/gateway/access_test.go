@@ -19,7 +19,8 @@ type fakeAuth struct {
 	guests []string
 }
 
-func (f *fakeAuth) Authorize(_ context.Context, _, guestID, token string) (access.Grant, error) {
+func (f *fakeAuth) Authorize(_ context.Context, req access.Request) (access.Grant, error) {
+	guestID, token := req.GuestID, req.ShareToken
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.guests = append(f.guests, guestID)

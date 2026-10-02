@@ -81,7 +81,8 @@ func run() error {
 		log.Warn("SECRET is not set; using a random one, so guest tokens will not survive a restart")
 	}
 	signer := access.NewSigner(secret)
-	accessStore := access.NewPostgres(pool)
+	// Visiting an unknown board id creates a public board: limit that per address.
+	accessStore := access.NewPostgres(pool).LimitNewBoards(ratelimit.NewKeyed(rate.Every(time.Minute), 20))
 
 	// Membership and board leases (ADR-0005). A single node works the same way:
 	// it is the only live node, so it serves every board.

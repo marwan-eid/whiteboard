@@ -311,7 +311,7 @@ Built in W6 (`internal/access`, `internal/ratelimit`).
   - Per message: 256 KiB, and 500 ops per batch.
   - Per IP: 64 open WebSockets (`MAX_CONNS_PER_IP`; 0 turns it off for load tests from one machine), and 30 new private boards an hour with a burst of 10. Refusals return HTTP 429 and are counted in `limit_rejections_total`. Behind Caddy the client IP is the last `X-Forwarded-For` entry (`TRUST_PROXY=true`), which Caddy appends itself.
   - Per board: 200k objects, deleted ones included (they are kept as tombstones). A batch that would create more is rejected; edits to existing objects still work.
-  - Not limited yet: public boards created by visiting new ids. Each costs one row until it has content.
+  - Per IP, also: 60 new public boards an hour with a burst of 20, counting only joins that create a board by visiting a new id (`access.Postgres.LimitNewBoards`). Over the limit, the client gets `FORBIDDEN` with a reason.
 - **Demo board:** resets nightly from a seed snapshot. Vandalism can also be reverted with restore.
 
 ## 3.10 Browser client

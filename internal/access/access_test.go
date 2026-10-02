@@ -9,6 +9,7 @@ import (
 	"whiteboard/internal/db"
 	"whiteboard/internal/db/dbtest"
 	pb "whiteboard/internal/pb/whiteboard/v1"
+	"whiteboard/internal/ratelimit"
 )
 
 func TestSigner(t *testing.T) {
@@ -35,7 +36,7 @@ func TestBoardsAndLinks(t *testing.T) {
 	}
 	s := access.NewPostgres(pool)
 	grant := func(board, guest, token string) (pb.Role, error) {
-		g, err := s.Authorize(ctx, board, guest, token)
+		g, err := s.Authorize(ctx, access.Request{BoardID: board, GuestID: guest, ShareToken: token})
 		return g.Role, err
 	}
 
@@ -65,7 +66,7 @@ func TestBoardsAndLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	edit, _ := s.CreateLink(ctx, b.ID, "alice", pb.Role_ROLE_EDITOR)
-	if g, _ := s.Authorize(ctx, b.ID, "bob", view.Token); g.Role != pb.Role_ROLE_VIEWER || g.LinkID != view.ID {
+	if g, _ := s.Authorize(ctx, access.Request{BoardID: b.ID, GuestID: "bob", ShareToken: view.Token}); g.Role != pb.Role_ROLE_VIEWER || g.LinkID != view.ID {
 		t.Fatalf("view link grant = %+v", g)
 	}
 	if r, _ := grant(b.ID, "", edit.Token); r != pb.Role_ROLE_EDITOR {
@@ -98,5 +99,32 @@ func TestBoardsAndLinks(t *testing.T) {
 	}
 	if boards, _ := s.ListBoards(ctx, "bob"); len(boards) != 0 {
 		t.Fatalf("bob's boards = %+v", boards)
+	}
+}
+
+func TestNewPublicBoardsAreLimitedPerAddress(t *testing.T) {
+	pool := dbtest.NewPool(t)
+	ctx := context.Background()
+	if _, err := db.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	s := access.NewPostgres(pool).LimitNewBoards(ratelimit.NewKeyed(0, 2))
+	join := func(board, ip string) error {
+		_, err := s.Authorize(ctx, access.Request{BoardID: board, ClientIP: ip})
+		return err
+	}
+	for _, b := range []string{"n1", "n2"} {
+		if err := join(b, "1.1.1.1"); err != nil {
+			t.Fatalf("creating %s: %v", b, err)
+		}
+	}
+	if err := join("n3", "1.1.1.1"); !errors.Is(err, access.ErrTooManyBoards) {
+		t.Fatalf("third new board: %v, want ErrTooManyBoards", err)
+	}
+	if err := join("n1", "1.1.1.1"); err != nil {
+		t.Fatalf("joining an existing board must not count: %v", err)
+	}
+	if err := join("n3", "2.2.2.2"); err != nil {
+		t.Fatalf("another address: %v", err)
 	}
 }

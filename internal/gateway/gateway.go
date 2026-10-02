@@ -109,8 +109,8 @@ func (g *Gateway) Shutdown() {
 }
 
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ip := ratelimit.ClientIP(r, g.cfg.TrustProxy)
 	if g.cfg.ConnsPerIP != nil {
-		ip := ratelimit.ClientIP(r, g.cfg.TrustProxy)
 		if !g.cfg.ConnsPerIP.Acquire(ip) {
 			g.metrics.LimitRejections.WithLabelValues("connections").Inc()
 			http.Error(w, "too many connections from this address", http.StatusTooManyRequests)
@@ -139,7 +139,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	err = g.serve(r.Context(), c)
+	err = g.serve(r.Context(), c, ip)
 	switch status := websocket.CloseStatus(err); {
 	case errors.Is(err, errProtocol):
 		g.log.Info("closed connection", "reason", err, "remote", r.RemoteAddr)
@@ -150,7 +150,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
+func (g *Gateway) serve(ctx context.Context, c *websocket.Conn, clientIP string) error {
 	msg, _, err := g.read(ctx, c, g.cfg.HelloTimeout)
 	if err != nil {
 		return err
@@ -174,7 +174,13 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 	if g.cfg.Signer != nil && hello.GetGuestToken() != "" {
 		guestID, _ = g.cfg.Signer.Verify(hello.GetGuestToken()) // an invalid token just means anonymous
 	}
-	grant, err := g.cfg.Authorizer.Authorize(ctx, hello.GetBoardId(), guestID, hello.GetShareToken())
+	grant, err := g.cfg.Authorizer.Authorize(ctx, access.Request{
+		BoardID: hello.GetBoardId(), GuestID: guestID, ShareToken: hello.GetShareToken(), ClientIP: clientIP,
+	})
+	if errors.Is(err, access.ErrTooManyBoards) {
+		g.metrics.LimitRejections.WithLabelValues("board_creates").Inc()
+		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "too many new boards from this address; try again later")
+	}
 	if errors.Is(err, access.ErrForbidden) {
 		return g.reject(ctx, c, pb.ErrorCode_ERROR_CODE_FORBIDDEN, "no access to this board")
 	}
