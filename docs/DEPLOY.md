@@ -29,7 +29,7 @@ Ports 80 and 443 must be open. Caddy gets the certificate by itself.
 
 Everything is in [deploy/terraform](../deploy/terraform). It creates its own compartment, `whiteboard`, so it cannot touch anything else in the account. Inside it:
 - **Network:** a VCN and subnet that admit SSH (from `admin_cidr`), HTTP and HTTPS.
-- **VM:** one Ampere A1 VM (3 OCPU / 18 GB, 100 GB disk) running Ubuntu 24.04.
+- **VM:** one Ampere A1 VM (2 OCPU / 12 GB by default, the demo account's whole free A1 allowance; 100 GB disk) running Ubuntu 24.04.
 - **Backups:** a private bucket that deletes backups after 14 days, and a write-only upload URL for the VM.
 
 Within the Always Free limits this costs $0. Do not upgrade the account to Pay-As-You-Go: on a free account nothing can be billed.

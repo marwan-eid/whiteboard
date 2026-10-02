@@ -18,15 +18,15 @@ variable "admin_cidr" {
   default     = "0.0.0.0/0"
 }
 
-# Size of the VM, within the Always Free A1 allowance (4 OCPU and 24 GB per
-# account in total; see ADR-0006 for how it is shared with MilkRun).
+# Size of the VM, within the Always Free A1 allowance. The demo account's
+# allowance is 2 OCPU / 12 GB (see ADR-0006); some accounts get 4 / 24.
 variable "ocpus" {
   type    = number
-  default = 3
+  default = 2
 }
 variable "memory_gb" {
   type    = number
-  default = 18
+  default = 12
 }
 variable "boot_volume_gb" {
   type        = number

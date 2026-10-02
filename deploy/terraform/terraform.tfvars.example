@@ -12,5 +12,5 @@ ssh_public_key_path = "C:/Users/you/.ssh/whiteboard_oci.pub"
 # site_address  = "my-whiteboard.duckdns.org"
 # duckdns_token = "..."
 
-# ocpus = 3      # Always Free A1: 4 OCPU / 24 GB per account in total
-# memory_gb = 18
+# ocpus = 2      # Always Free A1: check your allowance (2 / 12 or 4 / 24)
+# memory_gb = 12

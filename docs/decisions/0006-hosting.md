@@ -61,3 +61,11 @@ If MilkRun ends up needing 2 OCPU / 12 GB, the whiteboard VM shrinks to 2 OCPU /
 - **Self-hosting:** the production stack and the self-host stack are the same Compose file, so self-hosting is `docker compose up`.
 - **Latency depends on location:** the demo runs in one region, so users far from it see higher latency. Benchmarks report latency on the benchmark rig separately from end-user (WAN) latency.
 - **Downtime risk:** a reclaim or capacity problem can take the demo down for however long a rebuild takes. That rebuild time is measured.
+
+## Revision 2026-10-02: the account's real allowance
+At deploy time, Oracle's limits API reported this account's Always Free A1 allowance as **2 OCPU / 12 GB**, not 4 / 24. That is what the "if MilkRun needs more" row above already sized for. With the user's agreement:
+- The whiteboard VM takes all of it, 2 OCPU / 12 GB, and runs the full stack: Caddy, 2 nodes, Postgres, Prometheus and Grafana.
+- MilkRun stays on its AMD Micro VM, which is a separate allowance. Moving MilkRun to A1 later would mean shrinking this VM.
+- The domain is `<ip>.sslip.io`, which needs no account.
+
+The first `terraform apply` hit "Out of host capacity" for A1 in eu-amsterdam-1. As planned above, the create is retried until capacity frees up. Everything else (compartment, network, backup bucket) was created on the first try.
