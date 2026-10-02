@@ -41,8 +41,11 @@ type clientState struct {
 	moves map[string]bool
 	// Cursors this client is currently shown.
 	shownCursors map[uint64]struct{}
-	role         pb.Role
-	linkID       string // share link used to join, if any
+	// shownSig is nearestSet.sig of the cursors last shown, when the client
+	// was not among them (see appendCursors); 0 otherwise.
+	shownSig uint64
+	role     pb.Role
+	linkID   string // share link used to join, if any
 	// presenceStale forces a cursor recompute on the next frame (after joining
 	// or moving the viewport).
 	presenceStale bool

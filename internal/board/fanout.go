@@ -2,6 +2,8 @@ package board
 
 import (
 	"cmp"
+	"encoding/binary"
+	"hash/fnv"
 	"math"
 	"runtime"
 	"slices"
@@ -155,8 +157,20 @@ func (b *Board) buildFrame(w *frameWorker, id uint64, c *clientState, t *tickFra
 // nearest to its center first, at most maxCursorsPerClient. It sends cursors
 // that moved or newly appeared, and gone for those that left its selection.
 func (b *Board) appendCursors(w *frameWorker, fb *frameBuilder, id uint64, c *clientState, t *tickFrames) {
+	e := b.nearestCursors(c.view, t)
+	self := e.shows(id)
+	// Fast path: the client is not among the cursors it would be shown, and
+	// was shown exactly this set last time, so only moves are news. Their
+	// encoding is shared by everyone looking at the same region.
+	if !self && !c.presenceStale && c.shownSig == e.sig && c.shownSig != 0 {
+		if m := e.movedEntries(t.moved); len(m) > 0 {
+			fb.raw(m)
+		}
+		return
+	}
+
 	w.cands = w.cands[:0]
-	for _, k := range b.nearestCursors(c.view, t) {
+	for _, k := range e.cands {
 		if k.id != id && len(w.cands) < maxCursorsPerClient {
 			w.cands = append(w.cands, k)
 		}
@@ -176,6 +190,43 @@ func (b *Board) appendCursors(w *frameWorker, fb *frameBuilder, id uint64, c *cl
 		}
 	}
 	c.shownCursors = visible
+	c.shownSig = 0
+	if !self {
+		c.shownSig = e.sig
+	}
+}
+
+// nearestSet is the answer nearestCursors shares within a presence tick.
+type nearestSet struct {
+	// cands are the maxCursorsPerClient+1 nearest, nearest first.
+	cands []cursorCand
+	// sig identifies the first maxCursorsPerClient ids: the set shown to any
+	// client not among them. 0 means none.
+	sig uint64
+
+	once  sync.Once
+	moved []byte // encoded entries for the shown cursors that moved this tick
+}
+
+// shows reports whether id is among the cursors clients outside the set see.
+func (s *nearestSet) shows(id uint64) bool {
+	for _, k := range s.cands[:min(len(s.cands), maxCursorsPerClient)] {
+		if k.id == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *nearestSet) movedEntries(moved map[uint64]bool) []byte {
+	s.once.Do(func() {
+		for _, k := range s.cands[:min(len(s.cands), maxCursorsPerClient)] {
+			if moved[k.id] {
+				s.moved = appendMessage(s.moved, protowire.Number(fieldFrameCursors), &pb.CursorUpdate{ClientId: k.id, X: k.x, Y: k.y})
+			}
+		}
+	})
+	return s.moved
 }
 
 // cursorCell is the granularity views are snapped to for nearestCursors.
@@ -188,7 +239,7 @@ type viewKey struct{ x0, y0, x1, y1 int64 }
 // shared, within a presence tick, by every client whose view snaps outward
 // to the same cursorCell grid: many people looking at one region cost one
 // computation, not one each.
-func (b *Board) nearestCursors(view spatial.Rect, t *tickFrames) []cursorCand {
+func (b *Board) nearestCursors(view spatial.Rect, t *tickFrames) *nearestSet {
 	cell := func(v float64, up bool) int64 {
 		f := v / cursorCell
 		if up {
@@ -205,7 +256,7 @@ func (b *Board) nearestCursors(view spatial.Rect, t *tickFrames) []cursorCand {
 		}
 	}
 	if v, ok := t.nearest.Load(key); ok {
-		return v.([]cursorCand)
+		return v.(*nearestSet)
 	}
 	cx, cy := q.X+q.W/2, q.Y+q.H/2
 	var cands []cursorCand
@@ -219,8 +270,21 @@ func (b *Board) nearestCursors(view spatial.Rect, t *tickFrames) []cursorCand {
 		cands = cands[:keep]
 	}
 	slices.SortFunc(cands, func(a, b cursorCand) int { return cmp.Compare(a.d, b.d) })
-	t.nearest.Store(key, cands)
-	return cands
+	set := &nearestSet{cands: cands}
+	if n := min(len(cands), maxCursorsPerClient); n > 0 {
+		ids := make([]uint64, n)
+		for i, k := range cands[:n] {
+			ids[i] = k.id
+		}
+		slices.Sort(ids)
+		h := fnv.New64a()
+		for _, id := range ids {
+			_ = binary.Write(h, binary.LittleEndian, id)
+		}
+		set.sig = h.Sum64() | 1 // never 0
+	}
+	actual, _ := t.nearest.LoadOrStore(key, set)
+	return actual.(*nearestSet)
 }
 
 // selectNearest reorders c so its first k elements are the k smallest by d

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"testing"
@@ -634,6 +635,94 @@ func drain(c *fakeConn) []*pb.ServerMessage {
 			out = append(out, m)
 		default:
 			return out
+		}
+	}
+}
+
+// Many clients share one view, so the shared cursor fast path does most of
+// the work. However cursors move, each client must end up showing
+// min(30, others) cursors, never its own, each at its latest position.
+func TestSharedCursorsStayExact(t *testing.T) {
+	e := newEnv(t)
+	const n = 40
+	view := &pb.Viewport{X: 0, Y: 0, W: 1000, H: 1000}
+	conns := make([]*fakeConn, n)
+	var bd *Board
+	for i := range conns {
+		conns[i] = newConn(uint64(100 + i))
+		b, err := e.reg.Join(t.Context(), "x", conns[i], view)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bd = b
+	}
+	// Everyone has a cursor before the moves start.
+	for i := range n {
+		if i < maxCursorsPerClient {
+			bd.SetCursor(uint64(100+i), 500, 500)
+		} else {
+			bd.SetCursor(uint64(100+i), 40, 40)
+		}
+	}
+	shown := make([]map[uint64][2]float64, n)
+	for i := range shown {
+		shown[i] = map[uint64][2]float64{}
+	}
+	collect := func() {
+		for i, c := range conns {
+			for _, m := range drain(c) {
+				for _, cu := range m.GetFrame().GetCursors() {
+					if cu.GetGone() {
+						delete(shown[i], cu.GetClientId())
+					} else {
+						shown[i][cu.GetClientId()] = [2]float64{cu.GetX(), cu.GetY()}
+					}
+				}
+			}
+		}
+	}
+	latest := map[uint64][2]float64{}
+	for i := range n {
+		latest[uint64(100+i)] = [2]float64{500, 500}
+		if i >= maxCursorsPerClient {
+			latest[uint64(100+i)] = [2]float64{40, 40}
+		}
+	}
+	rng := rand.New(rand.NewPCG(3, 4))
+	for range 60 {
+		for range 1 + rng.IntN(15) {
+			// Clients 100..129 stay near the center and 130..139 in a corner, so the
+			// shown set stays the same while its members move: the fast path.
+			k := rng.IntN(n)
+			id := uint64(100 + k)
+			p := [2]float64{float64(460 + rng.IntN(80)), float64(460 + rng.IntN(80))}
+			if k >= maxCursorsPerClient {
+				p = [2]float64{float64(20 + rng.IntN(40)), float64(20 + rng.IntN(40))}
+			}
+			latest[id] = p
+			bd.SetCursor(id, p[0], p[1])
+		}
+		time.Sleep(time.Duration(rng.IntN(20)) * time.Millisecond)
+		collect()
+	}
+	time.Sleep(100 * time.Millisecond) // several presence ticks with no moves
+	collect()
+	for i := range conns {
+		self := uint64(100 + i)
+		others := len(latest)
+		if _, ok := latest[self]; ok {
+			others--
+		}
+		if want := min(maxCursorsPerClient, others); len(shown[i]) != want {
+			t.Fatalf("client %d shows %d cursors, want %d", self, len(shown[i]), want)
+		}
+		for id, p := range shown[i] {
+			if id == self {
+				t.Fatalf("client %d is shown its own cursor", self)
+			}
+			if p != latest[id] {
+				t.Fatalf("client %d shows %d at %v, latest is %v", self, id, p, latest[id])
+			}
 		}
 	}
 }
