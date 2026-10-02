@@ -24,14 +24,19 @@ func main() {
 	url := flag.String("url", "ws://localhost:8080/ws", "WebSocket URL of a node (or Caddy)")
 	board := flag.String("board", "demo", "board id")
 	flag.Parse()
+	if err := run(*url, *board); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
 
-	c := client.New(client.Config{URL: *url, BoardID: *board})
+func run(url, board string) error {
+	c := client.New(client.Config{URL: url, BoardID: board})
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := c.Connect(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 	objects := c.Snapshot() // sorted by id
 	h := sha256.New()
@@ -39,11 +44,11 @@ func main() {
 	for _, o := range objects {
 		b, err := opts.Marshal(o)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return err
 		}
 		_, _ = fmt.Fprintf(h, "%d:", len(b))
 		_, _ = h.Write(b)
 	}
-	fmt.Printf("board %s: seq %d, %d objects, sha256 %x\n", *board, c.Stats().ServerSeq, len(objects), h.Sum(nil))
+	fmt.Printf("board %s: seq %d, %d objects, sha256 %x\n", board, c.Stats().ServerSeq, len(objects), h.Sum(nil))
+	return nil
 }
