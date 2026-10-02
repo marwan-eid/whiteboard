@@ -34,11 +34,12 @@ func TestLoadOverrides(t *testing.T) {
 		"MAX_CONNS_PER_IP": "0",
 		"TRUST_PROXY":      "true",
 		"TICK":             "33ms",
+		"TICK_MAX":         "60ms",
 	}), host("ignored"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":9000" || cfg.NodeID != "node-7" || cfg.LogLevel != slog.LevelDebug || cfg.MaxConnsPerIP != 0 || !cfg.TrustProxy || cfg.Tick != 33*time.Millisecond {
+	if cfg.Addr != ":9000" || cfg.NodeID != "node-7" || cfg.LogLevel != slog.LevelDebug || cfg.MaxConnsPerIP != 0 || !cfg.TrustProxy || cfg.Tick != 33*time.Millisecond || cfg.TickMax != 60*time.Millisecond {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
 }
@@ -55,6 +56,7 @@ func TestLoadErrors(t *testing.T) {
 		"bad MAX_CONNS_PER_IP": {map[string]string{"DATABASE_URL": "x", "MAX_CONNS_PER_IP": "-1"}, host("h")},
 		"bad TRUST_PROXY":      {map[string]string{"DATABASE_URL": "x", "TRUST_PROXY": "maybe"}, host("h")},
 		"bad TICK":             {map[string]string{"DATABASE_URL": "x", "TICK": "fast"}, host("h")},
+		"bad TICK_MAX":         {map[string]string{"DATABASE_URL": "x", "TICK_MAX": "0s"}, host("h")},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

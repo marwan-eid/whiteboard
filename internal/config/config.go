@@ -30,6 +30,9 @@ type Config struct {
 	// Tick is how often each board commits and sends frames (TICK, default
 	// 20ms). Longer ticks mean fewer, larger frames per client.
 	Tick time.Duration
+	// TickMax is the tick of a very busy board (TICK_MAX, default 50ms); a
+	// value no longer than TICK keeps every board at TICK.
+	TickMax time.Duration
 	// TrustProxy takes the client IP from the last X-Forwarded-For entry,
 	// appended by the reverse proxy (TRUST_PROXY=true). Set it only when the
 	// node is reachable solely through that proxy.
@@ -83,6 +86,13 @@ func Load(getenv func(string) string, hostname func() (string, error)) (Config, 
 			return Config{}, fmt.Errorf("invalid TICK %q", v)
 		}
 		cfg.Tick = d
+	}
+	if v := getenv("TICK_MAX"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Millisecond {
+			return Config{}, fmt.Errorf("invalid TICK_MAX %q", v)
+		}
+		cfg.TickMax = d
 	}
 	if lvl := getenv("LOG_LEVEL"); lvl != "" {
 		if err := cfg.LogLevel.UnmarshalText([]byte(strings.ToLower(lvl))); err != nil {

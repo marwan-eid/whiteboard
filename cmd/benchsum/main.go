@@ -2,13 +2,15 @@
 // Markdown table: one row per run, and per editor count the median p99 over
 // its runs. Runs whose load generator used more than 70% of its two cores
 // are marked invalid (docs/BENCHMARKS.md): the loadgen, not the server,
-// may have been the bottleneck.
+// may have been the bottleneck. The commit p99 column shows when the
+// runner's disk, not the server, set the tail: a group commit waits for fsync.
 //
 //	go run ./cmd/benchsum results/
 package main
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -42,6 +44,7 @@ type row struct {
 	nodeMem             string  // last sample
 	loadgenMem          string  // max RSS
 	kicked              float64 // slow consumers kicked
+	commitP99           string  // upper bound of the bucket holding the p99 group commit
 	cpuModel            string
 	invalid, incomplete string
 }
@@ -67,13 +70,13 @@ func main() {
 		return a.run - b.run
 	})
 
-	fmt.Println("| Editors | Run | p50 ms | p90 ms | p99 ms | p99.9 ms | max ms | Samples | Ops sent | Node CPU | Postgres CPU | Node memory | Slow clients kicked | Loadgen CPU | Loadgen memory | CPU | Notes |")
-	fmt.Println("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	fmt.Println("| Editors | Run | p50 ms | p90 ms | p99 ms | p99.9 ms | max ms | Samples | Ops sent | Node CPU | Postgres CPU | Node memory | Slow clients kicked | Loadgen CPU | Loadgen memory | Commit p99 | CPU | Notes |")
+	fmt.Println("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, r := range rows {
 		notes := strings.TrimSpace(r.invalid + " " + r.incomplete)
-		fmt.Printf("| %d | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %d | %d | %.0f%% | %.0f%% | %s | %.0f | %.0f%% | %s | %s | %s |\n",
+		fmt.Printf("| %d | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %d | %d | %.0f%% | %.0f%% | %s | %.0f | %.0f%% | %s | %s | %s | %s |\n",
 			r.s.Editors, r.run, r.s.P50, r.s.P90, r.s.P99, r.s.P999, r.s.Max, r.s.Samples, r.s.OpsSent,
-			r.nodeCPU, r.pgCPU, r.nodeMem, r.kicked, r.loadgenCPU, r.loadgenMem, r.cpuModel, notes)
+			r.nodeCPU, r.pgCPU, r.nodeMem, r.kicked, r.loadgenCPU, r.loadgenMem, r.commitP99, r.cpuModel, notes)
 	}
 
 	fmt.Println()
@@ -153,6 +156,7 @@ func read(dir string) (row, bool) {
 	after := metrics(filepath.Join(dir, "metrics-after.txt"))
 	before := metrics(filepath.Join(dir, "metrics-before.txt"))
 	r.kicked = after[`clients_kicked_total{reason="slow_consumer"}`] - before[`clients_kicked_total{reason="slow_consumer"}`]
+	r.commitP99 = quantile(after, before, "board_commit_duration_seconds", 0.99)
 
 	if s, err := os.ReadFile(filepath.Join(dir, "setup.txt")); err == nil {
 		for line := range strings.SplitSeq(string(s), "\n") {
@@ -199,6 +203,36 @@ func dockerStats(path, name string) (float64, string) {
 		return 0, ""
 	}
 	return sum / float64(n), mem
+}
+
+// quantile returns "≤ N ms": the upper bound of the histogram bucket that
+// holds quantile q of the observations made between the two scrapes.
+func quantile(after, before map[string]float64, name string, q float64) string {
+	type bucket struct{ le, n float64 }
+	var bs []bucket
+	for k, v := range after {
+		le, ok := strings.CutPrefix(k, name+`_bucket{le="`)
+		if !ok {
+			continue
+		}
+		le = strings.TrimSuffix(le, `"}`)
+		f, err := strconv.ParseFloat(le, 64)
+		if err != nil || le == "+Inf" {
+			continue
+		}
+		bs = append(bs, bucket{f, v - before[k]})
+	}
+	slices.SortFunc(bs, func(a, b bucket) int { return cmp.Compare(a.le, b.le) })
+	total := after[name+"_count"] - before[name+"_count"]
+	if total <= 0 {
+		return ""
+	}
+	for _, b := range bs {
+		if b.n >= q*total {
+			return fmt.Sprintf("≤ %.1f ms", b.le*1000)
+		}
+	}
+	return fmt.Sprintf("> %.0f ms", bs[len(bs)-1].le*1000)
 }
 
 // metrics reads a Prometheus text exposition into series → value.

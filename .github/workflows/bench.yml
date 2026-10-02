@@ -1,6 +1,8 @@
 # Benchmark scenario 1 (docs/BENCHMARKS.md): editors on one board, sync
 # latency. Run from the Actions tab. Each (editors, run) pair is its own job
-# on its own runner; the summary job collects them into one table.
+# on its own runner; the summary job collects them into one table. With
+# several tick_max values, each runner measures all of them in turn (the order
+# alternates by run), so a slow runner affects every variant alike.
 name: bench
 
 on:
@@ -18,6 +20,9 @@ on:
       tick:
         description: "Board tick interval on the node"
         default: "20ms"
+      tick_max:
+        description: "Tick of a very busy board; several, comma-separated, are compared on the same runner (20ms turns the adaptive tick off)"
+        default: "50ms"
 
 permissions:
   contents: read
@@ -26,14 +31,14 @@ jobs:
   run:
     name: ${{ matrix.editors }} editors, run ${{ matrix.run }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
         editors: ${{ fromJSON(inputs.editors) }}
         run: ${{ fromJSON(inputs.runs) }}
     env:
-      OUT: results/${{ matrix.editors }}-${{ matrix.run }}
+      RUN: ${{ matrix.editors }}-${{ matrix.run }}
       TICK: ${{ inputs.tick }}
     steps:
       - uses: actions/checkout@v7
@@ -42,53 +47,62 @@ jobs:
           go-version-file: go.mod
       - name: Record the setup
         run: |
-          mkdir -p "$OUT"
+          mkdir -p "results"
           {
             echo "commit: $(git rev-parse HEAD)"
             echo "go: $(go version)"
             echo "runner: $RUNNER_NAME ($ImageOS $ImageVersion)"
-            echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}, tick ${{ inputs.tick }}"
+            echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}, tick ${{ inputs.tick }}, tick_max ${{ inputs.tick_max }}"
             echo "server: 1 node + Postgres on cores 0-1 (deploy/compose.bench.yaml); loadgen on cores 2-3"
             echo "loadgen: GOGC=400 GOMEMLIMIT=10GiB, clients keep no replicas (client.Config.StampsOnly)"
             echo "--- lscpu"; lscpu
             echo "--- free -m"; free -m
             echo "--- docker"; docker version --format '{{.Server.Version}}'
-          } > "$OUT/setup.txt"
-          cat "$OUT/setup.txt"
+          } > results/setup.txt
+          cat results/setup.txt
       - name: Raise limits for thousands of sockets
         run: |
           sudo sysctl -w net.ipv4.ip_local_port_range="10240 65535"
           sudo sysctl -w fs.file-max=1048576
-      - name: Start the server
-        run: docker compose -f compose.yaml -f deploy/compose.bench.yaml up -d --build --wait --wait-timeout 300 postgres node-1
       - name: Build the tools
         run: go build -o bin/ ./cmd/loadgen ./cmd/seed ./cmd/benchsum
-      - name: Seed 10k objects
-        run: bin/seed -url ws://localhost:8081/ws -board bench -objects 10000 -layout grid
-      - name: Run the scenario
+      - name: Run the scenario, once per tick_max
         run: |
           ulimit -n 65535
-          curl -s localhost:8081/metrics > "$OUT/metrics-before.txt"
-          # Samplers: container CPU and memory every 5 s, the node's live stats every 10 s.
-          ( while true; do docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' >> "$OUT/docker-stats.csv"; sleep 5; done ) &
-          samplers=$!
-          ( while true; do curl -s localhost:8081/api/stats >> "$OUT/stats.jsonl"; echo >> "$OUT/stats.jsonl"; sleep 10; done ) &
-          samplers="$samplers $!"
-          # A 30 s CPU profile of the node, two minutes in (inside the measured window).
-          ( sleep 120; curl -s -o "$OUT/node-cpu.pprof" "localhost:8081/debug/pprof/profile?seconds=30" ) &
           # The loadgen has memory to spare; less GC leaves more CPU for the simulated clients.
           export GOGC=400
           export GOMEMLIMIT=10GiB # the runner has 16 GB; collect harder before it runs out
+          variants=$(echo "${{ inputs.tick_max }}" | tr ',' ' ')
+          # Even runs go in reverse order, so no variant always runs first.
+          if [ $(( ${{ matrix.run }} % 2 )) -eq 0 ]; then variants=$(echo "$variants" | tr ' ' '\n' | tac | tr '\n' ' '); fi
           status=0
-          /usr/bin/time -f '%e %U %S %M' -o "$OUT/time.txt" taskset -c 2,3 bin/loadgen \
-            -scenario loadgen/scenarios/editors.yaml -editors ${{ matrix.editors }} -duration ${{ inputs.duration }} \
-            -url ws://localhost:8081/ws -board bench -seed ${{ matrix.run }} \
-            -json "$OUT/loadgen.json" -hlog "$OUT/latency.hlog" 2>&1 | tee "$OUT/loadgen.log" || status=$?
-          curl -s localhost:8081/metrics > "$OUT/metrics-after.txt"
-          kill $samplers || true
+          for v in $variants; do
+            OUT="results/tick-max-$v/$RUN"
+            mkdir -p "$OUT"
+            cp results/setup.txt "$OUT/"
+            echo "tick_max for this run: $v" >> "$OUT/setup.txt"
+            export TICK_MAX=$v
+            # A fresh server and database for each variant.
+            docker compose -f compose.yaml -f deploy/compose.bench.yaml down -v
+            docker compose -f compose.yaml -f deploy/compose.bench.yaml up -d --build --wait --wait-timeout 300 postgres node-1
+            bin/seed -url ws://localhost:8081/ws -board bench -objects 10000 -layout grid
+            curl -s localhost:8081/metrics > "$OUT/metrics-before.txt"
+            # Samplers: container CPU and memory every 5 s, the node's live stats every 10 s.
+            ( while true; do docker stats --no-stream --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}}' >> "$OUT/docker-stats.csv"; sleep 5; done ) &
+            samplers=$!
+            ( while true; do curl -s localhost:8081/api/stats >> "$OUT/stats.jsonl"; echo >> "$OUT/stats.jsonl"; sleep 10; done ) &
+            samplers="$samplers $!"
+            # A 30 s CPU profile of the node, two minutes in (inside the measured window).
+            ( sleep 120; curl -s -o "$OUT/node-cpu.pprof" "localhost:8081/debug/pprof/profile?seconds=30" ) &
+            /usr/bin/time -f '%e %U %S %M' -o "$OUT/time.txt" taskset -c 2,3 bin/loadgen \
+              -scenario loadgen/scenarios/editors.yaml -editors ${{ matrix.editors }} -duration ${{ inputs.duration }} \
+              -url ws://localhost:8081/ws -board bench -seed ${{ matrix.run }} \
+              -json "$OUT/loadgen.json" -hlog "$OUT/latency.hlog" 2>&1 | tee "$OUT/loadgen.log" || status=$?
+            curl -s localhost:8081/metrics > "$OUT/metrics-after.txt"
+            kill $samplers || true
+            docker compose logs node-1 > "$OUT/node.log" 2>&1 || true
+          done
           exit $status
-      - if: always()
-        run: docker compose logs node-1 > "$OUT/node.log" 2>&1 || true
       - if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -109,7 +123,11 @@ jobs:
           pattern: bench-*
           path: results/
           merge-multiple: true
-      - run: go run ./cmd/benchsum results | tee summary.md >> "$GITHUB_STEP_SUMMARY"
+      - run: |
+          go build -o bin/ ./cmd/benchsum
+          for d in results/tick-max-*/; do
+            v=$(basename "$d"); echo "## ${v#tick-max-} for very busy boards"; echo; bin/benchsum "$d"; echo
+          done | tee summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: bench-summary
