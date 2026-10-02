@@ -107,6 +107,9 @@ func run() int {
 	var cpuprofile string
 	flag.StringVar(&hlog, "hlog", "", "also write the latency histogram (HdrHistogram log, microseconds) to this file")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write a CPU profile of the load generator to this file")
+	var ackedOut, timelineOut string
+	flag.StringVar(&ackedOut, "acked", "", "write every acknowledged batch (client_id:client_seq per line) to this file")
+	flag.StringVar(&timelineOut, "timeline", "", "write per-second frames and latency (CSV) to this file")
 	var memprofile string
 	flag.StringVar(&memprofile, "memprofile", "", "write a heap profile of the load generator, at the end of the run, to this file")
 	flag.Parse()
@@ -126,6 +129,9 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	if timelineOut != "" {
+		cfg.Timeline = loadgen.NewTimeline()
+	}
 	started := time.Now()
 	res := loadgen.Run(ctx, cfg)
 	if memprofile != "" {
@@ -147,6 +153,29 @@ func run() int {
 	if out != "" {
 		data, _ := json.MarshalIndent(map[string]any{"config": cfg, "summary": s}, "", "  ")
 		if err := os.WriteFile(out, data, 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
+	if ackedOut != "" {
+		var b strings.Builder
+		for _, a := range res.Acked {
+			fmt.Fprintf(&b, "%d:%d\n", a.ClientID, a.ClientSeq)
+		}
+		if err := os.WriteFile(ackedOut, []byte(b.String()), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
+	if timelineOut != "" {
+		f, err := os.Create(timelineOut)
+		if err == nil {
+			err = cfg.Timeline.WriteCSV(f)
+			if cerr := f.Close(); err == nil {
+				err = cerr
+			}
+		}
+		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}

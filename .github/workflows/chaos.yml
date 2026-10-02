@@ -1,0 +1,91 @@
+# Benchmark 5 (docs/BENCHMARKS.md): failover under load. 250 editors work on
+# one board served by two nodes behind Caddy; at T+120 s the node serving the
+# board is killed (SIGKILL) or paused for 10 s. cmd/chaoscheck then checks
+# that every acknowledged batch is in the log exactly once, and how long
+# editors went without frames.
+name: chaos
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "kill or pause"
+        default: kill
+      editors:
+        description: "Editors"
+        default: "250"
+      runs:
+        description: "Run numbers, as a JSON array"
+        default: "[1, 2, 3]"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ inputs.mode }}, run ${{ matrix.run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        run: ${{ fromJSON(inputs.runs) }}
+    env:
+      OUT: results/${{ inputs.mode }}-${{ matrix.run }}
+      MAX_CONNS_PER_IP: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Record the setup
+        run: |
+          mkdir -p "$OUT"
+          {
+            echo "commit: $(git rev-parse HEAD)"
+            echo "mode: ${{ inputs.mode }}, editors: ${{ inputs.editors }}, run ${{ matrix.run }}"
+            echo "server: 2 nodes + Postgres + Caddy (compose.yaml), no core pinning; loadgen on the same runner"
+            echo "--- lscpu"; lscpu
+          } > "$OUT/setup.txt"
+      - name: Raise limits
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_port_range="10240 65535"
+          sudo sysctl -w fs.file-max=1048576
+      - name: Start the stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Build the tools
+        run: go build -o bin/ ./cmd/loadgen ./cmd/seed ./cmd/chaoscheck
+      - name: Seed 10k objects
+        run: bin/seed -url ws://localhost:8080/ws -board chaos -objects 10000 -layout grid
+      - name: Run with a failure at T+120 s
+        run: |
+          ulimit -n 65535
+          export GOGC=400 GOMEMLIMIT=10GiB
+          bin/loadgen -scenario loadgen/scenarios/editors.yaml -editors ${{ inputs.editors }} \
+            -ramp 30s -warmup 10s -duration 210s -url ws://localhost:8080/ws -board chaos -seed ${{ matrix.run }} \
+            -json "$OUT/loadgen.json" -hlog "$OUT/latency.hlog" -acked "$OUT/acked.txt" -timeline "$OUT/timeline.csv" \
+            > "$OUT/loadgen.log" 2>&1 &
+          loadgen=$!
+          sleep 120
+          owner=$(curl -s localhost:8080/api/boards/chaos/route | sed 's/.*"nodeId":"\([^"]*\)".*/\1/')
+          date +%s.%N > "$OUT/event_at"
+          echo "$owner" > "$OUT/owner"
+          if [ "${{ inputs.mode }}" = pause ]; then
+            docker compose pause "$owner"; sleep 10; docker compose unpause "$owner"
+          else
+            docker compose kill -s SIGKILL "$owner"
+          fi
+          wait $loadgen || true
+          tail -3 "$OUT/loadgen.log"
+      - name: Check the log and the recovery
+        run: |
+          bin/chaoscheck -database "postgres://whiteboard:whiteboard@127.0.0.1:5432/whiteboard?sslmode=disable" \
+            -board chaos -acked "$OUT/acked.txt" -timeline "$OUT/timeline.csv" \
+            -event-at "$(cat "$OUT/event_at")" -editors ${{ inputs.editors }} | tee "$OUT/check.md"
+      - if: always()
+        run: docker compose logs > "$OUT/compose.log" 2>&1 || true
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: chaos-${{ inputs.mode }}-${{ matrix.run }}
+          path: results/

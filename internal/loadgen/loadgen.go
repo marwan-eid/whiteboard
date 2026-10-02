@@ -51,6 +51,8 @@ type Config struct {
 	// ObjectsPerEditor is how many shapes each editor creates and then moves.
 	ObjectsPerEditor int
 	Seed             uint64
+	// Timeline, if set, records frames and latency per second (chaos runs).
+	Timeline *Timeline
 }
 
 func (c *Config) setDefaults() {
@@ -93,7 +95,13 @@ type Result struct {
 	Latency *hdrhistogram.Histogram
 	OpsSent int64
 	Elapsed time.Duration
+	// Acked lists every batch the server acknowledged as applied, so a chaos
+	// run can check each one is in the durable log.
+	Acked []Acked
 }
+
+// Acked identifies one acknowledged batch.
+type Acked struct{ ClientID, ClientSeq uint64 }
 
 // Summary is the result in the units reported in docs/BENCHMARKS.md.
 type Summary struct {
@@ -156,7 +164,7 @@ func Run(ctx context.Context, cfg Config) Result {
 					return
 				}
 			}
-			hist, late, err := runEditor(ctx, cfg, i, &sent, &opsSent, measureFrom, stopAt)
+			hist, late, acked, err := runEditor(ctx, cfg, i, &sent, &opsSent, measureFrom, stopAt)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -169,6 +177,7 @@ func Run(ctx context.Context, cfg Config) Result {
 				res.Late++
 			}
 			res.Latency.Merge(hist)
+			res.Acked = append(res.Acked, acked...)
 		}()
 	}
 	wg.Wait()
@@ -177,7 +186,7 @@ func Run(ctx context.Context, cfg Config) Result {
 	return res
 }
 
-func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent *atomic.Int64, measureFrom, stopAt time.Time) (hist *hdrhistogram.Histogram, late bool, err error) {
+func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent *atomic.Int64, measureFrom, stopAt time.Time) (hist *hdrhistogram.Histogram, late bool, acked []Acked, err error) {
 	rng := rand.New(rand.NewPCG(cfg.Seed, uint64(i)))
 	cx, cy := cfg.Area/2, cfg.Area/2
 	if rng.Float64() >= cfg.Hotspot {
@@ -196,12 +205,20 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 		StampsOnly: true,
 		OnFrame: func(f *pb.Frame) {
 			now := time.Now()
+			var samples []int64
+			if cfg.Timeline != nil {
+				defer func() { cfg.Timeline.record(now, i, samples) }()
+			}
 			if now.Before(measureFrom) {
 				return
 			}
+			record := func(us int64) {
+				_ = hist.RecordValue(us)
+				samples = append(samples, us)
+			}
 			for _, b := range f.GetBatches() {
 				if t, ok := sent.m.Load(stampKey(hlc.FromProto(b.GetStamp()))); ok {
-					_ = hist.RecordValue(now.Sub(t.(time.Time)).Microseconds())
+					record(now.Sub(t.(time.Time)).Microseconds())
 				}
 			}
 			// A shape created (or moved) into view arrives whole; the write that
@@ -215,17 +232,22 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 					}
 				}
 				if t, ok := sent.m.Load(stampKey(newest)); ok {
-					_ = hist.RecordValue(now.Sub(t.(time.Time)).Microseconds())
+					record(now.Sub(t.(time.Time)).Microseconds())
 				}
 			}
 		},
 	})
 	defer c.Close()
+	defer func() {
+		for _, cs := range c.Acked() {
+			acked = append(acked, Acked{ClientID: c.ID(), ClientSeq: cs})
+		}
+	}()
 	dialCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	err = c.Connect(dialCtx)
 	cancel()
 	if err != nil {
-		return nil, false, fmt.Errorf("connect: %w", err)
+		return nil, false, nil, fmt.Errorf("connect: %w", err)
 	}
 	late = time.Now().After(measureFrom)
 
@@ -260,7 +282,7 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 	for {
 		now := time.Now()
 		if now.After(stopAt) || ctx.Err() != nil {
-			return hist, late, nil
+			return hist, late, acked, nil
 		}
 		if cursorEvery > 0 && !now.Before(nextCursor) {
 			c.MoveCursor(cx+rng.NormFloat64()*cfg.ViewW/4, cy+rng.NormFloat64()*cfg.ViewH/4)
