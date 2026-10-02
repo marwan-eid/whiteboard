@@ -24,7 +24,12 @@ export type ChangeListener = (changed: ReadonlySet<string> | null) => void;
 interface Pending {
   batch: OpBatch;
   stamp: Stamp;
+  /** When it last went out (performance.now), if it did. */
+  sentAt?: number;
 }
+
+// Round trips kept for the stats panel.
+const RECENT_RTTS = 50;
 
 /**
  * The client side of board sync; mirrors internal/client (Go).
@@ -42,6 +47,7 @@ export class SyncSession {
   private readonly listeners = new Set<ChangeListener>();
   private readonly idPrefix: string;
   private pending: Pending[] = [];
+  private rtts: number[] = [];
   private nextClientSeq = 1;
   private nextObject = 0;
   private serverSeq = 0;
@@ -65,6 +71,17 @@ export class SyncSession {
         this.doc.applyBatch(batch.ops, stamp);
       }
     }
+  }
+
+  /** Median time from sending an edit to its ack, over recent edits; null before any. */
+  get medianRoundTripMs(): number | null {
+    if (this.rtts.length === 0) return null;
+    const s = [...this.rtts].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)]!;
+  }
+
+  get roundTripSamples(): number {
+    return this.rtts.length;
   }
 
   get pendingCount(): number {
@@ -93,10 +110,11 @@ export class SyncSession {
     const stamp = this.clock.now();
     const batch = create(OpBatchSchema, { clientSeq: BigInt(this.nextClientSeq++), stamp: stampToProto(stamp), ops });
     const changed = this.doc.applyBatch(ops, stamp);
-    this.pending.push({ batch, stamp });
+    const p: Pending = { batch, stamp };
+    this.pending.push(p);
     this.opts.store?.saveBatch(batch);
     this.saveCounters();
-    this.opts.send(batch);
+    if (this.opts.send(batch)) p.sentAt = performance.now();
     this.emit(changed);
   }
 
@@ -117,7 +135,7 @@ export class SyncSession {
     }
     for (const p of this.pending) this.doc.applyBatch(p.batch.ops, p.stamp);
     for (const o of w.objects) for (const fs of o.stamps) this.clock.observe(stampFromProto(fs.stamp));
-    for (const p of this.pending) this.opts.send(p.batch);
+    for (const p of this.pending) p.sentAt = this.opts.send(p.batch) ? performance.now() : undefined;
     this.emit(null);
   }
 
@@ -160,6 +178,10 @@ export class SyncSession {
       if (a.rejected) {
         resync = true;
       } else if (a.seq !== 0n) {
+        if (sent!.sentAt !== undefined) {
+          this.rtts.push(performance.now() - sent!.sentAt);
+          if (this.rtts.length > RECENT_RTTS) this.rtts.shift();
+        }
         // The server keeps our stamp unless it was too far in the future; if
         // it replaced it, our replica holds values under a stamp nobody else has.
         const applied = stampFromProto(a.stamp);

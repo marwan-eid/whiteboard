@@ -29,6 +29,8 @@ type Deps struct {
 	BoardCreates *ratelimit.Keyed
 	// TrustProxy takes the client IP from X-Forwarded-For (see config.TrustProxy).
 	TrustProxy bool
+	// NodeID is reported by /api/stats.
+	NodeID string
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -49,6 +51,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		_, _ = w.Write([]byte("ready\n"))
 	})
+
+	// Public live numbers for the stats panel.
+	(&statsAPI{node: d.NodeID, m: d.Metrics, every: time.Second}).register(mux)
 
 	// Scraped by Prometheus on the internal network; Caddy does not expose it.
 	mux.Handle("GET /metrics", promhttp.HandlerFor(d.Metrics.Registry, promhttp.HandlerOpts{}))

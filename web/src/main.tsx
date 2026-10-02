@@ -21,6 +21,7 @@ import { SyncSession } from "./sync/session";
 import { BoardMenu } from "./ui/BoardMenu";
 import { HistoryPanel } from "./ui/HistoryPanel";
 import { StatusBadge } from "./ui/StatusBadge";
+import { StatsPanel } from "./ui/StatsPanel";
 import { TimerWidget } from "./ui/TimerWidget";
 import { VotePanel } from "./ui/VotePanel";
 import { Toolbar } from "./ui/Toolbar";
@@ -103,6 +104,7 @@ function renderUI(): void {
       <HistoryPanel view={historyView} canRestore={role !== Role.VIEWER} />
       <BoardMenu api={api} boardId={boardId} role={role} />
       <TimerWidget session={sync} now={() => connection.serverNow()} canEdit={role !== Role.VIEWER} />
+      <StatsPanel session={sync} />
       <VotePanel session={sync} editor={editor} canEdit={role !== Role.VIEWER} onBadges={onBadges} />
     </>,
     uiHost,

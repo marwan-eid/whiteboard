@@ -315,17 +315,13 @@ Built in W6 (`internal/access`, `internal/ratelimit`).
 - **Undo:** gestures (a whole drag or resize) undo as one step. Undo writes the previous values back with a fresh stamp (ADR-0001).
 
 ## 4. Observability
-- **Prometheus metrics:**
-  - `ws_connections`
-  - `ops_in_total`
-  - `frames_out_total`
-  - `tick_duration_seconds`
-  - `commit_duration_seconds`
-  - `fanout_bytes_total`
-  - `send_queue_overflows_total`
-  - `sync_server_latency_seconds`: from receive to written to the socket
-  - `client_reported_rtt_seconds`: sampled from clients
-- **Live metrics panel:** a public stats endpoint that pushes once a second: connected users, ops/s, and p50/p99 of server-side and client-reported latency. Each number is labeled with what it measures.
+- **Prometheus metrics** (`internal/metrics`, served on `/metrics`, which Caddy does not expose):
+  - Connections and traffic: `ws_connections`, `ws_messages_in_total{type}`, `fanout_bytes_total`, `clients_kicked_total{reason}`.
+  - Limits: `ws_throttled_total{limit}`, `limit_rejections_total{limit}`.
+  - Boards and edits: `boards_active`, `batches_applied_total`, `batches_rejected_total`, `stamps_clamped_total`, `board_restores_total`, `board_failures_total{stage}`.
+  - Timing: `board_tick_duration_seconds`, `board_commit_duration_seconds`, `board_load_duration_seconds`, `board_snapshot_duration_seconds`, and `sync_server_latency_seconds`, from a batch arriving until it is committed and its frames are queued to the other clients.
+  - Snapshots: `board_snapshots_written_total`, `board_snapshot_failures_total`.
+- **Live stats panel (W7):** `GET /api/stats/stream` sends a server-sent event once a second (`GET /api/stats` gives one snapshot). It reports, for the node the browser is on: open connections, boards in memory, edits per second, and p50/p99 of server sync time (as in `sync_server_latency_seconds`). The rate and percentiles are over the last 10 complete seconds, kept in per-second HDR histograms (`metrics.Live`). The panel adds the browser's own median round trip over its last 50 edits, from sending an edit to its ack, timed from when it was actually sent. Each number says what it measures; none of them is a benchmark result. Clients do not report latency to the server.
 - **Logs:** structured JSON via `slog`.
 - **Grafana:** used in production.
 

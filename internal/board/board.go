@@ -637,6 +637,7 @@ func (b *Board) flush() error {
 	done := time.Now()
 	for _, p := range b.uncommitted {
 		b.metrics.SyncServerLatency.Observe(done.Sub(p.received).Seconds())
+		b.metrics.Live.RecordBatch(done.Sub(p.received))
 	}
 	b.uncommitted = b.uncommitted[:0]
 	b.metrics.TickDuration.Observe(time.Since(start).Seconds())

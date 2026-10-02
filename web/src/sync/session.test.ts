@@ -333,6 +333,9 @@ describe("SyncSession against a model server", () => {
     c.deliverIn();
     expect(c.session.pendingCount).toBe(0);
     expect(c.session.seq).toBe(1);
+    // The acked edit gave one round-trip sample.
+    expect(c.session.roundTripSamples).toBe(1);
+    expect(c.session.medianRoundTripMs).toBeGreaterThanOrEqual(0);
   });
 
   it("resyncs when the server rewrote its stamp", () => {

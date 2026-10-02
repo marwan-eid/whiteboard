@@ -2,7 +2,7 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-> **Status: early development. W6 (access and offline) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, and edits made offline survive a reload. The performance targets in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) have not been benchmarked yet; local pre-checks are in [benchmarks/results](benchmarks/results).
+> **Status: early development. W7 (timers, voting, live stats) of [the plan](docs/PLAN.md) is done.** A working multiplayer whiteboard: boards sync live between browsers, persist in Postgres, survive a server crash, each client loads only the part of the board it is looking at, every version can be replayed and restored, boards can be private with revocable share links, edits made offline survive a reload, and a board has a shared timer, dot voting and a live stats panel. The performance targets in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) have not been benchmarked yet; local pre-checks are in [benchmarks/results](benchmarks/results).
 
 ## Run it
 
@@ -26,6 +26,9 @@ For anything reachable by others, set your own `SECRET` (it signs guest identiti
 | Attach an arrow | Start or end it on a shape; it follows the shape |
 | Undo, redo | Ctrl+Z, Ctrl+Shift+Z |
 | Pan, zoom | Scroll, or Space+drag, or the hand tool; Ctrl+scroll or pinch to zoom |
+| Shared timer | **⏱ Timer** at the top; everyone sees the same countdown |
+| Dot vote | **🗳 Vote** to start; select shapes and **Vote for selection**; **End vote** shows the results |
+| Live server stats | **📊** at the bottom left |
 
 ## Develop
 

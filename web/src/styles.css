@@ -479,3 +479,71 @@ body {
   border-radius: 6px;
   font: inherit;
 }
+
+.stats-toggle {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  font-size: 18px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.stats {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-head button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.stats dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin: 8px 0;
+}
+
+.stats dt small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.stats .muted {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}

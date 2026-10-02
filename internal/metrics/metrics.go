@@ -3,6 +3,8 @@
 package metrics
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
@@ -41,12 +43,15 @@ type Metrics struct {
 	// SyncServerLatency is from a batch arriving until its frames are queued
 	// (includes waiting for the tick and the commit).
 	SyncServerLatency prometheus.Histogram
+	// Live feeds the public stats panel.
+	Live *Live
 }
 
 func New() *Metrics {
 	reg := prometheus.NewRegistry()
 	m := &Metrics{
 		Registry: reg,
+		Live:     newLive(time.Now),
 		WSConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "ws_connections",
 			Help: "Open WebSocket connections on this node.",

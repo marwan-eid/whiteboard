@@ -101,6 +101,7 @@ func run() error {
 			// 30 new private boards an hour per IP, 10 at once.
 			BoardCreates: ratelimit.NewKeyed(rate.Every(2*time.Minute), 10),
 			TrustProxy:   cfg.TrustProxy,
+			NodeID:       cfg.NodeID,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
