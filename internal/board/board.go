@@ -70,10 +70,15 @@ type Config struct {
 	MaxSkew time.Duration
 	// IdleTimeout unloads a board that has had no clients for this long.
 	IdleTimeout time.Duration
-	// SnapshotEvery writes a snapshot after this many new batches, or after
-	// SnapshotInterval if anything changed, whichever comes first.
-	SnapshotEvery    uint64
-	SnapshotInterval time.Duration
+	// SnapshotEvery writes a snapshot after this many new batches, but at most
+	// once per SnapshotMinInterval; and after SnapshotInterval if anything
+	// changed. Building a snapshot copies the board on its goroutine, so on a
+	// busy board (1,000 batches/s) snapshotting every 5,000 batches stalled
+	// ticks every few seconds. The price is a longer log tail to replay on load.
+	// A negative SnapshotMinInterval means no minimum.
+	SnapshotEvery       uint64
+	SnapshotMinInterval time.Duration
+	SnapshotInterval    time.Duration
 	// MaxObjects caps the objects a board holds, deleted ones included (they
 	// are kept as tombstones). Batches that would create more are rejected.
 	MaxObjects int
@@ -100,6 +105,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.SnapshotInterval == 0 {
 		c.SnapshotInterval = 10 * time.Minute
+	}
+	if c.SnapshotMinInterval == 0 {
+		c.SnapshotMinInterval = time.Minute
 	}
 	if c.IOTimeout == 0 {
 		c.IOTimeout = 10 * time.Second
@@ -763,8 +771,9 @@ func (b *Board) maybeSnapshot() {
 			return
 		}
 	}
-	changed := b.seq - b.lastSnapshotSeq
-	if changed == 0 || (changed < b.cfg.SnapshotEvery && b.cfg.Now().Sub(b.lastSnapshotAt) < b.cfg.SnapshotInterval) {
+	changed, since := b.seq-b.lastSnapshotSeq, b.cfg.Now().Sub(b.lastSnapshotAt)
+	due := (changed >= b.cfg.SnapshotEvery && since >= b.cfg.SnapshotMinInterval) || since >= b.cfg.SnapshotInterval
+	if changed == 0 || !due {
 		return
 	}
 	snap := b.buildSnapshot()

@@ -444,7 +444,7 @@ func TestLogGapFailsLoad(t *testing.T) {
 }
 
 func TestPeriodicSnapshots(t *testing.T) {
-	e := newEnv(t, func(c *Config) { c.SnapshotEvery = 3 })
+	e := newEnv(t, func(c *Config) { c.SnapshotEvery, c.SnapshotMinInterval = 3, -1 })
 	a := newConn(10)
 	bd, _ := e.join(t, "x", a)
 	submit(t, bd, 10, batch(1, now.UnixMilli(), create("a:1", 0)))
@@ -724,5 +724,26 @@ func TestSharedCursorsStayExact(t *testing.T) {
 				t.Fatalf("client %d shows %d at %v, latest is %v", self, id, p, latest[id])
 			}
 		}
+	}
+}
+
+// On a busy board, batches alone do not snapshot more often than
+// SnapshotMinInterval (the clock here never moves).
+func TestSnapshotsWaitForMinInterval(t *testing.T) {
+	e := newEnv(t, func(c *Config) { c.SnapshotEvery = 3 })
+	a := newConn(10)
+	bd, _ := e.join(t, "x", a)
+	submit(t, bd, 10, batch(1, now.UnixMilli(), create("a:1", 0)))
+	for cs := uint64(2); cs <= 12; cs++ {
+		submit(t, bd, 10, batch(cs, now.UnixMilli()+int64(cs), move("a:1", float64(cs))))
+	}
+	for seen := false; !seen; {
+		for _, ack := range a.frame(t).Acks {
+			seen = seen || ack.GetSeq() == 12
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := e.store.Snapshots("x"); n != 0 {
+		t.Fatalf("%d snapshots within the minimum interval", n)
 	}
 }
