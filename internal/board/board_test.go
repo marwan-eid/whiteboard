@@ -747,3 +747,20 @@ func TestSnapshotsWaitForMinInterval(t *testing.T) {
 		t.Fatalf("%d snapshots within the minimum interval", n)
 	}
 }
+
+func TestTickSlowsOnlyForBusyBoards(t *testing.T) {
+	b := &Board{cfg: Config{Tick: 20 * time.Millisecond, TickMax: 50 * time.Millisecond, BusyFrom: 400}, clients: map[uint64]*clientState{}}
+	for n, want := range map[int]time.Duration{0: 20, 400: 20, 600: 35, 800: 50, 2000: 50} {
+		clear(b.clients)
+		for i := range n {
+			b.clients[uint64(i)] = nil
+		}
+		if got := b.tickInterval(); got != want*time.Millisecond {
+			t.Fatalf("%d clients: tick %v, want %vms", n, got, want)
+		}
+	}
+	b.cfg.TickMax = b.cfg.Tick // off
+	if got := b.tickInterval(); got != 20*time.Millisecond {
+		t.Fatalf("disabled: %v", got)
+	}
+}

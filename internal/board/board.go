@@ -65,6 +65,13 @@ type Config struct {
 	Store  Store
 	// Tick is how often accepted batches are committed and broadcast.
 	Tick time.Duration
+	// A board with more than BusyFrom clients ticks more slowly, reaching
+	// TickMax at twice BusyFrom: fewer, larger frames per client, so less
+	// per-frame work when one board is very busy. A 50 ms tick took the
+	// 1,000-editor p99 from 231 to 123 ms in W9, but slows small boards, so it
+	// only applies to big ones. TickMax <= Tick turns this off.
+	TickMax  time.Duration
+	BusyFrom int
 	// MaxSkew is how far ahead of server time a client stamp may be before
 	// the server replaces it with its own clock.
 	MaxSkew time.Duration
@@ -96,6 +103,12 @@ type Config struct {
 func (c *Config) setDefaults() {
 	if c.Tick == 0 {
 		c.Tick = 20 * time.Millisecond
+	}
+	if c.TickMax == 0 {
+		c.TickMax = 50 * time.Millisecond
+	}
+	if c.BusyFrom == 0 {
+		c.BusyFrom = 400
 	}
 	if c.MaxSkew == 0 {
 		c.MaxSkew = 2 * time.Second
@@ -364,7 +377,8 @@ func (b *Board) run() {
 		b.fail("load", err)
 		return
 	}
-	ticker := time.NewTicker(b.cfg.Tick)
+	interval := b.cfg.Tick
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -389,6 +403,10 @@ func (b *Board) run() {
 				return
 			}
 			b.maybeSnapshot()
+			if want := b.tickInterval(); want != interval {
+				interval = want
+				ticker.Reset(interval)
+			}
 			if len(b.clients) == 0 && b.cfg.Now().Sub(b.idleSince) >= b.cfg.IdleTimeout {
 				if err := b.shutdown(); err != nil {
 					b.log.Warn("final snapshot failed", "err", err)
@@ -874,4 +892,16 @@ func sortedMoves(m map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// tickInterval is the tick for the board's current number of clients
+// (Config.TickMax), rounded to whole milliseconds so it changes rarely.
+func (b *Board) tickInterval() time.Duration {
+	c := b.cfg
+	n := len(b.clients)
+	if c.TickMax <= c.Tick || n <= c.BusyFrom {
+		return c.Tick
+	}
+	f := min(1, float64(n-c.BusyFrom)/float64(c.BusyFrom))
+	return (c.Tick + time.Duration(f*float64(c.TickMax-c.Tick))).Round(time.Millisecond)
 }
