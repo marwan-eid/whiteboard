@@ -183,6 +183,17 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 	conn := &clientConn{id: hello.GetClientId(), ws: c, send: make(chan []byte, g.cfg.SendQueue), writeTimeout: g.cfg.WriteTimeout}
 	b, err := g.boards.JoinAs(ctx, hello.GetBoardId(), conn, hello.GetViewport(), grant.Role, grant.LinkID)
 	if err != nil {
+		if moved := (*board.MovedError)(nil); errors.As(err, &moved) {
+			// Another node serves this board: send the client there.
+			if data, merr := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Moved{Moved: &pb.Moved{NodeId: moved.Node}}}); merr == nil {
+				wctx, cancel := context.WithTimeout(ctx, g.cfg.WriteTimeout)
+				_ = c.Write(wctx, websocket.MessageBinary, data)
+				cancel()
+			}
+			g.metrics.ClientsMoved.Inc()
+			_ = c.Close(websocket.StatusTryAgainLater, "moved")
+			return nil
+		}
 		// Usually the board failed to load (database down); the client retries with backoff.
 		_ = c.Close(websocket.StatusTryAgainLater, "board unavailable")
 		return err

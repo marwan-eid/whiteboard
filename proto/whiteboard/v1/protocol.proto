@@ -28,7 +28,14 @@ message ServerMessage {
     ServerError error = 3;
     Frame frame = 4;
     History history = 5;
+    Moved moved = 6;
   }
+}
+
+// Another node serves this board: reconnect through /n/{node_id}/ws. Sent
+// instead of a Welcome, then the server closes the connection.
+message Moved {
+  string node_id = 1;
 }
 
 // First message on every connection.

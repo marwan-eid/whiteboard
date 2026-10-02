@@ -21,15 +21,19 @@ services:
       retries: 30
     restart: unless-stopped
 
-  node-1:
+  # Two board nodes (ADR-0005). Each board is served by one node at a time,
+  # chosen by lease; Caddy reaches a given node at /n/{node}/ and spreads
+  # /ws and /api over both. Add a node by copying node-2 and adding it to
+  # deploy/Caddyfile.
+  node-1: &node
     build:
       context: .
       dockerfile: deploy/server.Dockerfile
-    environment:
+    environment: &node-env
       DATABASE_URL: postgres://whiteboard:${POSTGRES_PASSWORD:-whiteboard}@postgres:5432/whiteboard?sslmode=disable
       NODE_ID: node-1
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # Signs guest tokens. Set your own for anything public: SECRET=... docker compose up
+      # Signs guest tokens; every node must share it. Set your own for anything public: SECRET=... docker compose up
       SECRET: ${SECRET:-dev-only-secret-change-me}
       # The node is reachable only through Caddy, which sets X-Forwarded-For.
       TRUST_PROXY: "true"
@@ -45,6 +49,12 @@ services:
       retries: 30
     restart: unless-stopped
 
+  node-2:
+    <<: *node
+    environment:
+      <<: *node-env
+      NODE_ID: node-2
+
   web:
     build:
       context: .
@@ -53,6 +63,8 @@ services:
       - "${HTTP_PORT:-8080}:80"
     depends_on:
       node-1:
+        condition: service_healthy
+      node-2:
         condition: service_healthy
     restart: unless-stopped
 

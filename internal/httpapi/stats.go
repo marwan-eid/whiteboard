@@ -39,6 +39,8 @@ func (a *statsAPI) register(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, a.snapshot())
 	})
 	mux.HandleFunc("GET /api/stats/stream", a.stream)
+	// The same, for one node through Caddy (the panel shows the browser's node).
+	mux.HandleFunc("GET /n/{node}/api/stats/stream", a.stream)
 }
 
 func (a *statsAPI) snapshot() Stats {

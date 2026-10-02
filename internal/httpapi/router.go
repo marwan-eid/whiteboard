@@ -11,6 +11,7 @@ import (
 
 	"whiteboard/internal/access"
 	"whiteboard/internal/metrics"
+	"whiteboard/internal/protocol"
 	"whiteboard/internal/ratelimit"
 )
 
@@ -29,8 +30,11 @@ type Deps struct {
 	BoardCreates *ratelimit.Keyed
 	// TrustProxy takes the client IP from X-Forwarded-For (see config.TrustProxy).
 	TrustProxy bool
-	// NodeID is reported by /api/stats.
+	// NodeID is this node, reported by /api/stats and by the route API when
+	// Route is nil (a single node).
 	NodeID string
+	// Route names the node serving a board (cluster.Node.Route).
+	Route func(ctx context.Context, boardID string) (string, error)
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -71,5 +75,31 @@ func NewRouter(d Deps) http.Handler {
 	}
 
 	mux.Handle("GET /ws", d.Gateway)
+	// /n/{node}/ws is how clients reach a given node through Caddy. The node
+	// does not trust the path: it serves the board only if it holds its lease,
+	// and otherwise answers Moved.
+	mux.Handle("GET /n/{node}/ws", d.Gateway)
+
+	// Which node serves a board, for clients to connect to it directly.
+	mux.HandleFunc("GET /api/boards/{board}/route", func(w http.ResponseWriter, r *http.Request) {
+		boardID := r.PathValue("board")
+		if !protocol.ValidBoardID(boardID) {
+			http.Error(w, "invalid board id", http.StatusBadRequest)
+			return
+		}
+		node := d.NodeID
+		if d.Route != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			n, err := d.Route(ctx, boardID)
+			if err != nil {
+				http.Error(w, "routing unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			node = n
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]string{"nodeId": node})
+	})
 	return mux
 }

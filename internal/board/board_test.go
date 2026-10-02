@@ -567,3 +567,73 @@ func TestObjectCap(t *testing.T) {
 		t.Fatalf("editing a full board: %v", ack)
 	}
 }
+
+// Two nodes that both believe they own a board (a lease taken over while the
+// old owner was paused) share one log. The second to commit a seq hits the
+// fence: its board drops without acking, and the edit lands after a rejoin.
+func TestSecondWriterIsFenced(t *testing.T) {
+	st := NewMemoryStore()
+	newNode := func() (*Registry, *metrics.Metrics) {
+		m := metrics.New()
+		cfg := Config{NodeID: "n", Store: st, Tick: 5 * time.Millisecond, Now: func() time.Time { return now }}
+		return NewRegistry(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), m), m
+	}
+	ra, _ := newNode()
+	rb, mb := newNode()
+	a, b := newConn(10), newConn(11)
+	ba, err := ra.Join(t.Context(), "x", a, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.next(t)
+	bb, err := rb.Join(t.Context(), "x", b, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.next(t)
+
+	submit(t, ba, 10, batch(1, now.UnixMilli(), create("a:1", 1)))
+	if f := a.frame(t); f.Acks[0].GetSeq() != 1 {
+		t.Fatalf("first writer ack = %v", f.Acks)
+	}
+	submit(t, bb, 11, batch(1, now.UnixMilli()+1, create("b:1", 1)))
+	waitFor(t, func() bool { return b.kickedFor() != nil })
+	if *b.kickedFor() != KickReload {
+		t.Fatalf("kicked for %v", *b.kickedFor())
+	}
+	if got := testutil.ToFloat64(mb.BoardFailures.WithLabelValues("commit")); got != 1 {
+		t.Fatalf("commit failures = %v", got)
+	}
+	for _, m := range drain(b) {
+		if f := m.GetFrame(); f != nil && len(f.Acks) > 0 {
+			t.Fatalf("fenced batch was acked: %v", f.Acks)
+		}
+	}
+
+	// The client rejoins (its board reloads from the log) and resends.
+	b2 := newConn(11)
+	bb, err = rb.Join(t.Context(), "x", b2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := b2.next(t).GetWelcome(); w.GetSeq() != 1 || len(w.GetObjects()) != 1 {
+		t.Fatalf("reloaded welcome = %v", w)
+	}
+	submit(t, bb, 11, batch(1, now.UnixMilli()+1, create("b:1", 1)))
+	if f := b2.frame(t); f.Acks[0].GetSeq() != 2 {
+		t.Fatalf("resent batch ack = %v", f.Acks)
+	}
+}
+
+// drain returns the messages already delivered to c.
+func drain(c *fakeConn) []*pb.ServerMessage {
+	var out []*pb.ServerMessage
+	for {
+		select {
+		case m := <-c.msgs:
+			out = append(out, m)
+		default:
+			return out
+		}
+	}
+}

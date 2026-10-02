@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +39,9 @@ type Config struct {
 	Viewport *pb.Viewport
 	// Trace, if set, receives a line per sync event (for debugging tests).
 	Trace func(string)
+	// NodeURL is where to reach a node after the server answers Moved. The
+	// default puts /n/{node}/ws on URL's host (how Caddy routes to a node).
+	NodeURL func(node string) string
 }
 
 // ErrOffline is returned when an operation needs a connection the client doesn't have.
@@ -54,14 +59,18 @@ type Client struct {
 	nextObject    uint64
 	serverSeq     uint64
 	conn          *websocket.Conn
-	dialing       bool
-	offline       bool // Offline() called: stay disconnected
-	welcomed      chan struct{}
-	closed        bool
-	resyncs       int
-	connects      int
-	acked         []uint64 // client seqs the server acked as applied
-	cursors       map[uint64][2]float64
+	// target is where the next dial goes after a Moved; empty means cfg.URL.
+	target   string
+	moved    bool // the last disconnect was a Moved
+	moves    int  // Moved answers since the last Welcome
+	dialing  bool
+	offline  bool // Offline() called: stay disconnected
+	welcomed chan struct{}
+	closed   bool
+	resyncs  int
+	connects int
+	acked    []uint64 // client seqs the server acked as applied
+	cursors  map[uint64][2]float64
 	// held is what the server believes this client holds: the objects in
 	// its viewport. Only the server changes it (Welcome, Frame.objects,
 	// Frame.leave). The replica can also contain objects with pending local
@@ -77,6 +86,9 @@ func New(cfg Config) *Client {
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.NodeURL == nil {
+		cfg.NodeURL = func(node string) string { return nodeURL(cfg.URL, node) }
 	}
 	return &Client{
 		cfg:           cfg,
@@ -142,8 +154,22 @@ func (c *Client) dial(ctx context.Context) error {
 		c.mu.Unlock()
 	}()
 
-	ws, _, err := websocket.Dial(ctx, c.cfg.URL, nil) //nolint:bodyclose // the websocket library owns the handshake response body
+	c.mu.Lock()
+	dialURL, moves := c.cfg.URL, c.moves
+	if c.target != "" {
+		dialURL = c.target
+	}
+	c.mu.Unlock()
+	if moves > 2 {
+		// Nodes disagreeing about who owns the board (a lease changing hands): slow down.
+		time.Sleep(min(time.Duration(moves)*50*time.Millisecond, time.Second))
+	}
+	ws, _, err := websocket.Dial(ctx, dialURL, nil) //nolint:bodyclose // the websocket library owns the handshake response body
 	if err != nil {
+		// The node we were sent to is unreachable: start again from cfg.URL.
+		c.mu.Lock()
+		c.target = ""
+		c.mu.Unlock()
 		return fmt.Errorf("dial: %w", err)
 	}
 	ws.SetReadLimit(64 << 20)
@@ -261,6 +287,13 @@ func (c *Client) readLoop(ws *websocket.Conn) {
 			case c.histories <- m.History:
 			default: // nobody is waiting; drop it
 			}
+		case *pb.ServerMessage_Moved:
+			c.mu.Lock()
+			c.target, c.moved = c.cfg.NodeURL(m.Moved.GetNodeId()), true
+			c.moves++
+			c.mu.Unlock()
+			c.trace("moved to %s", m.Moved.GetNodeId())
+			ws.CloseNow()
 		case *pb.ServerMessage_Error:
 			ws.CloseNow()
 		}
@@ -273,6 +306,12 @@ func (c *Client) onDisconnect(ws *websocket.Conn) {
 		c.conn = nil
 		c.welcomed = make(chan struct{})
 	}
+	// Only the dial right after a Moved goes to that node: if it fails later,
+	// start again from cfg.URL, which reaches any live node.
+	if !c.moved {
+		c.target = ""
+	}
+	c.moved = false
 	redial := c.cfg.Reconnect && !c.offline && !c.closed && c.conn == nil
 	c.mu.Unlock()
 	if redial {
@@ -306,6 +345,7 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 	if c.conn != ws {
 		return
 	}
+	c.moves = 0
 	d, err := doc.FromSnapshot(w.GetObjects())
 	if err != nil {
 		ws.CloseNow()
@@ -614,4 +654,19 @@ func (c *Client) sendMessage(ctx context.Context, msg *pb.ClientMessage) error {
 		return ErrOffline
 	}
 	return write(ctx, c.conn, msg)
+}
+
+// nodeURL turns a server URL such as ws://host/ws (or ws://host/n/x/ws) into
+// the URL of a given node behind the same proxy: ws://host/n/{node}/ws.
+func nodeURL(base, node string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+	p := strings.TrimSuffix(u.Path, "/ws")
+	if i := strings.LastIndex(p, "/n/"); i >= 0 {
+		p = p[:i]
+	}
+	u.Path = p + "/n/" + url.PathEscape(node) + "/ws"
+	return u.String()
 }

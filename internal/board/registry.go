@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"whiteboard/internal/metrics"
 	pb "whiteboard/internal/pb/whiteboard/v1"
@@ -18,6 +20,10 @@ type Registry struct {
 
 	mu     sync.Mutex
 	boards map[string]*Board
+
+	claims   [64]sync.Mutex // see claimLock
+	releases sync.WaitGroup
+	crashed  atomic.Bool // CrashAll ran: like a dead process, release nothing
 }
 
 func NewRegistry(cfg Config, log *slog.Logger, m *metrics.Metrics) *Registry {
@@ -39,8 +45,11 @@ func (r *Registry) Join(ctx context.Context, boardID string, c Conn, viewport *p
 // granted access, if any.
 func (r *Registry) JoinAs(ctx context.Context, boardID string, c Conn, viewport *pb.Viewport, role pb.Role, linkID string) (*Board, error) {
 	for {
-		b := r.get(boardID)
-		err := b.join(ctx, c, viewport, role, linkID)
+		b, err := r.get(ctx, boardID)
+		if err != nil {
+			return nil, err // including *MovedError: another node serves it
+		}
+		err = b.join(ctx, c, viewport, role, linkID)
 		if errors.Is(err, errClosed) {
 			continue // raced with the board unloading; load it again
 		}
@@ -73,15 +82,17 @@ func (r *Registry) Close(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
+	r.releases.Wait()
 	return errors.Join(errs...)
 }
 
 // CrashAll drops every board without committing or snapshotting, as if the
 // process died (for failure tests). Boards reload from the store on next join.
 func (r *Registry) CrashAll() {
+	r.crashed.Store(true)
 	for _, b := range r.all() {
 		select {
-		case b.inbox <- crashMsg{}:
+		case b.inbox <- crashMsg{stage: "crash", err: errors.New("crashed on purpose")}:
 			<-b.done
 		case <-b.done:
 		}
@@ -98,15 +109,38 @@ func (r *Registry) all() []*Board {
 	return out
 }
 
-func (r *Registry) get(boardID string) *Board {
+// get returns the live board, loading it if needed. With a Placement, a
+// board is created only after this node claims its lease, and the board
+// carries that lease's epoch.
+func (r *Registry) get(ctx context.Context, boardID string) (*Board, error) {
+	if b := r.Lookup(boardID); b != nil {
+		return b, nil
+	}
+	var epoch uint64
+	var lease *leaseClock
+	if p := r.cfg.Placement; p != nil {
+		unlock := r.claimLock(boardID)
+		defer unlock()
+		if b := r.Lookup(boardID); b != nil {
+			return b, nil
+		}
+		claimed := time.Now() // before asking: the lease runs at least TTL from here
+		var err error
+		if epoch, err = p.Claim(ctx, boardID); err != nil {
+			return nil, err
+		}
+		lease = &leaseClock{}
+		lease.extend(claimed, p.LeaseTTL())
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	b := r.boards[boardID]
 	if b == nil {
 		b = newBoard(boardID, r.cfg, r.log, r.metrics, r.remove)
+		b.epoch, b.lease = epoch, lease
 		r.boards[boardID] = b
 	}
-	return b
+	return b, nil
 }
 
 // remove runs on the board's goroutine before it closes. Removing the board
@@ -117,4 +151,5 @@ func (r *Registry) remove(b *Board) {
 	if r.boards[b.id] == b {
 		delete(r.boards, b.id)
 	}
+	r.release(b)
 }

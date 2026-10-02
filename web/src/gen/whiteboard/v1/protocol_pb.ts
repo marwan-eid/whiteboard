@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file whiteboard/v1/protocol.proto.
  */
 export const file_whiteboard_v1_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxItECCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAEicKBmN1cnNvchgEIAEoCzIVLndoaXRlYm9hcmQudjEuQ3Vyc29ySAASKwoIdmlld3BvcnQYBSABKAsyFy53aGl0ZWJvYXJkLnYxLlZpZXdwb3J0SAASMAoHaGlzdG9yeRgGIAEoCzIdLndoaXRlYm9hcmQudjEuSGlzdG9yeVJlcXVlc3RIABIwCgdyZXN0b3JlGAcgASgLMh0ud2hpdGVib2FyZC52MS5SZXN0b3JlUmVxdWVzdEgAQgUKA21zZyLuAQoNU2VydmVyTWVzc2FnZRIpCgd3ZWxjb21lGAEgASgLMhYud2hpdGVib2FyZC52MS5XZWxjb21lSAASLAoJdGltZV9wb25nGAIgASgLMhcud2hpdGVib2FyZC52MS5UaW1lUG9uZ0gAEisKBWVycm9yGAMgASgLMhoud2hpdGVib2FyZC52MS5TZXJ2ZXJFcnJvckgAEiUKBWZyYW1lGAQgASgLMhQud2hpdGVib2FyZC52MS5GcmFtZUgAEikKB2hpc3RvcnkYBSABKAsyFi53aGl0ZWJvYXJkLnYxLkhpc3RvcnlIAEIFCgNtc2cimwEKBUhlbGxvEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SEAoIYm9hcmRfaWQYAiABKAkSEQoJY2xpZW50X2lkGAMgASgEEikKCHZpZXdwb3J0GAQgASgLMhcud2hpdGVib2FyZC52MS5WaWV3cG9ydBITCgtndWVzdF90b2tlbhgFIAEoCRITCgtzaGFyZV90b2tlbhgGIAEoCSLSAQoHV2VsY29tZRIYChBwcm90b2NvbF92ZXJzaW9uGAEgASgNEg8KB25vZGVfaWQYAiABKAkSFgoOc2VydmVyX3RpbWVfbXMYAyABKAMSCwoDc2VxGAQgASgEEisKB29iamVjdHMYBSADKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFN0YXRlEhcKD2xhc3RfY2xpZW50X3NlcRgGIAEoBBIOCgZvbmxpbmUYByABKA0SIQoEcm9sZRgIIAEoDjITLndoaXRlYm9hcmQudjEuUm9sZSIWCghUaW1lUGluZxIKCgJ0MBgBIAEoASIuCghUaW1lUG9uZxIKCgJ0MBgBIAEoARIWCg5zZXJ2ZXJfdGltZV9tcxgCIAEoAyJGCgtTZXJ2ZXJFcnJvchImCgRjb2RlGAEgASgOMhgud2hpdGVib2FyZC52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSI8CgVTdGFtcBIPCgd3YWxsX21zGAEgASgDEg8KB2NvdW50ZXIYAiABKA0SEQoJY2xpZW50X2lkGAMgASgEIsMFCgtPYmplY3RQcm9wcxIrCgR0eXBlGAEgASgOMhgud2hpdGVib2FyZC52MS5TaGFwZVR5cGVIAIgBARIUCgdkZWxldGVkGAIgASgISAGIAQESDgoBeBgDIAEoAUgCiAEBEg4KAXkYBCABKAFIA4gBARIOCgF3GAUgASgBSASIAQESDgoBaBgGIAEoAUgFiAEBEg4KAXoYByABKAlIBogBARIRCgRmaWxsGAggASgNSAeIAQESEwoGc3Ryb2tlGAkgASgNSAiIAQESGQoMc3Ryb2tlX3dpZHRoGAogASgCSAmIAQESEQoEdGV4dBgLIAEoCUgKiAEBEhMKBnBvaW50cxgMIAEoDEgLiAEBEikKBGZyb20YDSABKAsyFi53aGl0ZWJvYXJkLnYxLkJpbmRpbmdIDIgBARInCgJ0bxgOIAEoCzIWLndoaXRlYm9hcmQudjEuQmluZGluZ0gNiAEBEhYKCWZvbnRfc2l6ZRgPIAEoAkgOiAEBEhcKCmVuZHNfYXRfbXMYECABKANID4gBARIZCgxyZW1haW5pbmdfbXMYESABKANIEIgBARIbCg52b3Rlc19wZXJfdXNlchgSIAEoDUgRiAEBEhMKBmNsb3NlZBgTIAEoCEgSiAEBEhIKBXZvdGVzGBQgASgJSBOIAQFCBwoFX3R5cGVCCgoIX2RlbGV0ZWRCBAoCX3hCBAoCX3lCBAoCX3dCBAoCX2hCBAoCX3pCBwoFX2ZpbGxCCQoHX3N0cm9rZUIPCg1fc3Ryb2tlX3dpZHRoQgcKBV90ZXh0QgkKB19wb2ludHNCBwoFX2Zyb21CBQoDX3RvQgwKCl9mb250X3NpemVCDQoLX2VuZHNfYXRfbXNCDwoNX3JlbWFpbmluZ19tc0IRCg9fdm90ZXNfcGVyX3VzZXJCCQoHX2Nsb3NlZEIICgZfdm90ZXMiQAoHQmluZGluZxIRCglvYmplY3RfaWQYASABKAkSEAoIYW5jaG9yX3gYAiABKAISEAoIYW5jaG9yX3kYAyABKAIiOwoCT3ASCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzImIKB09wQmF0Y2gSEgoKY2xpZW50X3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJiCg5TZXF1ZW5jZWRCYXRjaBILCgNzZXEYASABKAQSIwoFc3RhbXAYAiABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEh4KA29wcxgDIAMoCzIRLndoaXRlYm9hcmQudjEuT3AibQoDQWNrEhIKCmNsaWVudF9zZXEYASABKAQSCwoDc2VxGAIgASgEEiMKBXN0YW1wGAMgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIQCghyZWplY3RlZBgEIAEoCBIOCgZyZWFzb24YBSABKAki8AEKBUZyYW1lEi4KB2JhdGNoZXMYASADKAsyHS53aGl0ZWJvYXJkLnYxLlNlcXVlbmNlZEJhdGNoEiAKBGFja3MYAiADKAsyEi53aGl0ZWJvYXJkLnYxLkFjaxIsCgdjdXJzb3JzGAMgAygLMhsud2hpdGVib2FyZC52MS5DdXJzb3JVcGRhdGUSKwoHb2JqZWN0cxgEIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSEwoGb25saW5lGAUgASgNSACIAQESCwoDc2VxGAYgASgEEg0KBWxlYXZlGAcgAygJQgkKB19vbmxpbmUiQwoIVmlld3BvcnQSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXcYAyABKAESCQoBaBgEIAEoARILCgNsb2QYBSABKAgiHgoGQ3Vyc29yEgkKAXgYASABKAESCQoBeRgCIAEoASJFCgxDdXJzb3JVcGRhdGUSEQoJY2xpZW50X2lkGAEgASgEEgkKAXgYAiABKAESCQoBeRgDIAEoARIMCgRnb25lGAQgASgIInAKC09iamVjdFN0YXRlEgoKAmlkGAEgASgJEikKBXByb3BzGAIgASgLMhoud2hpdGVib2FyZC52MS5PYmplY3RQcm9wcxIqCgZzdGFtcHMYAyADKAsyGi53aGl0ZWJvYXJkLnYxLkZpZWxkU3RhbXBzIkYKC0ZpZWxkU3RhbXBzEiMKBXN0YW1wGAEgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBISCgpmaWVsZF9tYXNrGAIgASgNIh0KDkhpc3RvcnlSZXF1ZXN0EgsKA3NlcRgBIAEoBCJUCgdIaXN0b3J5EgsKA3NlcRgBIAEoBBIPCgd3YWxsX21zGAIgASgDEisKB29iamVjdHMYAyADKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFN0YXRlIh0KDlJlc3RvcmVSZXF1ZXN0EgsKA3NlcRgBIAEoBCpOCgRSb2xlEhQKEFJPTEVfVU5TUEVDSUZJRUQQABIPCgtST0xFX1ZJRVdFUhABEg8KC1JPTEVfRURJVE9SEAISDgoKUk9MRV9PV05FUhADKqIBCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEhoKFkVSUk9SX0NPREVfQkFEX1JFUVVFU1QQARIiCh5FUlJPUl9DT0RFX1VOU1VQUE9SVEVEX1ZFUlNJT04QAhIfChtFUlJPUl9DT0RFX0NMSUVOVF9JRF9JTl9VU0UQAxIYChRFUlJPUl9DT0RFX0ZPUkJJRERFThAEKvEBCglTaGFwZVR5cGUSGgoWU0hBUEVfVFlQRV9VTlNQRUNJRklFRBAAEhMKD1NIQVBFX1RZUEVfUkVDVBABEhYKElNIQVBFX1RZUEVfRUxMSVBTRRACEhUKEVNIQVBFX1RZUEVfU1RJQ0tZEAMSEwoPU0hBUEVfVFlQRV9URVhUEAQSFAoQU0hBUEVfVFlQRV9BUlJPVxAFEhcKE1NIQVBFX1RZUEVfRlJFRUhBTkQQBhIUChBTSEFQRV9UWVBFX1RJTUVSEAcSEwoPU0hBUEVfVFlQRV9WT1RFEAgSFQoRU0hBUEVfVFlQRV9CQUxMT1QQCUKqAQoRY29tLndoaXRlYm9hcmQudjFCDVByb3RvY29sUHJvdG9QAVoxd2hpdGVib2FyZC9pbnRlcm5hbC9wYi93aGl0ZWJvYXJkL3YxO3doaXRlYm9hcmR2MaICA1dYWKoCDVdoaXRlYm9hcmQuVjHKAg1XaGl0ZWJvYXJkXFYx4gIZV2hpdGVib2FyZFxWMVxHUEJNZXRhZGF0YeoCDldoaXRlYm9hcmQ6OlYxYgZwcm90bzM");
+  fileDesc("Chx3aGl0ZWJvYXJkL3YxL3Byb3RvY29sLnByb3RvEg13aGl0ZWJvYXJkLnYxItECCg1DbGllbnRNZXNzYWdlEiUKBWhlbGxvGAEgASgLMhQud2hpdGVib2FyZC52MS5IZWxsb0gAEiwKCXRpbWVfcGluZxgCIAEoCzIXLndoaXRlYm9hcmQudjEuVGltZVBpbmdIABIqCghvcF9iYXRjaBgDIAEoCzIWLndoaXRlYm9hcmQudjEuT3BCYXRjaEgAEicKBmN1cnNvchgEIAEoCzIVLndoaXRlYm9hcmQudjEuQ3Vyc29ySAASKwoIdmlld3BvcnQYBSABKAsyFy53aGl0ZWJvYXJkLnYxLlZpZXdwb3J0SAASMAoHaGlzdG9yeRgGIAEoCzIdLndoaXRlYm9hcmQudjEuSGlzdG9yeVJlcXVlc3RIABIwCgdyZXN0b3JlGAcgASgLMh0ud2hpdGVib2FyZC52MS5SZXN0b3JlUmVxdWVzdEgAQgUKA21zZyKVAgoNU2VydmVyTWVzc2FnZRIpCgd3ZWxjb21lGAEgASgLMhYud2hpdGVib2FyZC52MS5XZWxjb21lSAASLAoJdGltZV9wb25nGAIgASgLMhcud2hpdGVib2FyZC52MS5UaW1lUG9uZ0gAEisKBWVycm9yGAMgASgLMhoud2hpdGVib2FyZC52MS5TZXJ2ZXJFcnJvckgAEiUKBWZyYW1lGAQgASgLMhQud2hpdGVib2FyZC52MS5GcmFtZUgAEikKB2hpc3RvcnkYBSABKAsyFi53aGl0ZWJvYXJkLnYxLkhpc3RvcnlIABIlCgVtb3ZlZBgGIAEoCzIULndoaXRlYm9hcmQudjEuTW92ZWRIAEIFCgNtc2ciGAoFTW92ZWQSDwoHbm9kZV9pZBgBIAEoCSKbAQoFSGVsbG8SGAoQcHJvdG9jb2xfdmVyc2lvbhgBIAEoDRIQCghib2FyZF9pZBgCIAEoCRIRCgljbGllbnRfaWQYAyABKAQSKQoIdmlld3BvcnQYBCABKAsyFy53aGl0ZWJvYXJkLnYxLlZpZXdwb3J0EhMKC2d1ZXN0X3Rva2VuGAUgASgJEhMKC3NoYXJlX3Rva2VuGAYgASgJItIBCgdXZWxjb21lEhgKEHByb3RvY29sX3ZlcnNpb24YASABKA0SDwoHbm9kZV9pZBgCIAEoCRIWCg5zZXJ2ZXJfdGltZV9tcxgDIAEoAxILCgNzZXEYBCABKAQSKwoHb2JqZWN0cxgFIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUSFwoPbGFzdF9jbGllbnRfc2VxGAYgASgEEg4KBm9ubGluZRgHIAEoDRIhCgRyb2xlGAggASgOMhMud2hpdGVib2FyZC52MS5Sb2xlIhYKCFRpbWVQaW5nEgoKAnQwGAEgASgBIi4KCFRpbWVQb25nEgoKAnQwGAEgASgBEhYKDnNlcnZlcl90aW1lX21zGAIgASgDIkYKC1NlcnZlckVycm9yEiYKBGNvZGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLkVycm9yQ29kZRIPCgdtZXNzYWdlGAIgASgJIjwKBVN0YW1wEg8KB3dhbGxfbXMYASABKAMSDwoHY291bnRlchgCIAEoDRIRCgljbGllbnRfaWQYAyABKAQiwwUKC09iamVjdFByb3BzEisKBHR5cGUYASABKA4yGC53aGl0ZWJvYXJkLnYxLlNoYXBlVHlwZUgAiAEBEhQKB2RlbGV0ZWQYAiABKAhIAYgBARIOCgF4GAMgASgBSAKIAQESDgoBeRgEIAEoAUgDiAEBEg4KAXcYBSABKAFIBIgBARIOCgFoGAYgASgBSAWIAQESDgoBehgHIAEoCUgGiAEBEhEKBGZpbGwYCCABKA1IB4gBARITCgZzdHJva2UYCSABKA1ICIgBARIZCgxzdHJva2Vfd2lkdGgYCiABKAJICYgBARIRCgR0ZXh0GAsgASgJSAqIAQESEwoGcG9pbnRzGAwgASgMSAuIAQESKQoEZnJvbRgNIAEoCzIWLndoaXRlYm9hcmQudjEuQmluZGluZ0gMiAEBEicKAnRvGA4gASgLMhYud2hpdGVib2FyZC52MS5CaW5kaW5nSA2IAQESFgoJZm9udF9zaXplGA8gASgCSA6IAQESFwoKZW5kc19hdF9tcxgQIAEoA0gPiAEBEhkKDHJlbWFpbmluZ19tcxgRIAEoA0gQiAEBEhsKDnZvdGVzX3Blcl91c2VyGBIgASgNSBGIAQESEwoGY2xvc2VkGBMgASgISBKIAQESEgoFdm90ZXMYFCABKAlIE4gBAUIHCgVfdHlwZUIKCghfZGVsZXRlZEIECgJfeEIECgJfeUIECgJfd0IECgJfaEIECgJfekIHCgVfZmlsbEIJCgdfc3Ryb2tlQg8KDV9zdHJva2Vfd2lkdGhCBwoFX3RleHRCCQoHX3BvaW50c0IHCgVfZnJvbUIFCgNfdG9CDAoKX2ZvbnRfc2l6ZUINCgtfZW5kc19hdF9tc0IPCg1fcmVtYWluaW5nX21zQhEKD192b3Rlc19wZXJfdXNlckIJCgdfY2xvc2VkQggKBl92b3RlcyJACgdCaW5kaW5nEhEKCW9iamVjdF9pZBgBIAEoCRIQCghhbmNob3JfeBgCIAEoAhIQCghhbmNob3JfeRgDIAEoAiI7CgJPcBIKCgJpZBgBIAEoCRIpCgVwcm9wcxgCIAEoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0UHJvcHMiYgoHT3BCYXRjaBISCgpjbGllbnRfc2VxGAEgASgEEiMKBXN0YW1wGAIgASgLMhQud2hpdGVib2FyZC52MS5TdGFtcBIeCgNvcHMYAyADKAsyES53aGl0ZWJvYXJkLnYxLk9wImIKDlNlcXVlbmNlZEJhdGNoEgsKA3NlcRgBIAEoBBIjCgVzdGFtcBgCIAEoCzIULndoaXRlYm9hcmQudjEuU3RhbXASHgoDb3BzGAMgAygLMhEud2hpdGVib2FyZC52MS5PcCJtCgNBY2sSEgoKY2xpZW50X3NlcRgBIAEoBBILCgNzZXEYAiABKAQSIwoFc3RhbXAYAyABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhAKCHJlamVjdGVkGAQgASgIEg4KBnJlYXNvbhgFIAEoCSLwAQoFRnJhbWUSLgoHYmF0Y2hlcxgBIAMoCzIdLndoaXRlYm9hcmQudjEuU2VxdWVuY2VkQmF0Y2gSIAoEYWNrcxgCIAMoCzISLndoaXRlYm9hcmQudjEuQWNrEiwKB2N1cnNvcnMYAyADKAsyGy53aGl0ZWJvYXJkLnYxLkN1cnNvclVwZGF0ZRIrCgdvYmplY3RzGAQgAygLMhoud2hpdGVib2FyZC52MS5PYmplY3RTdGF0ZRITCgZvbmxpbmUYBSABKA1IAIgBARILCgNzZXEYBiABKAQSDQoFbGVhdmUYByADKAlCCQoHX29ubGluZSJDCghWaWV3cG9ydBIJCgF4GAEgASgBEgkKAXkYAiABKAESCQoBdxgDIAEoARIJCgFoGAQgASgBEgsKA2xvZBgFIAEoCCIeCgZDdXJzb3ISCQoBeBgBIAEoARIJCgF5GAIgASgBIkUKDEN1cnNvclVwZGF0ZRIRCgljbGllbnRfaWQYASABKAQSCQoBeBgCIAEoARIJCgF5GAMgASgBEgwKBGdvbmUYBCABKAgicAoLT2JqZWN0U3RhdGUSCgoCaWQYASABKAkSKQoFcHJvcHMYAiABKAsyGi53aGl0ZWJvYXJkLnYxLk9iamVjdFByb3BzEioKBnN0YW1wcxgDIAMoCzIaLndoaXRlYm9hcmQudjEuRmllbGRTdGFtcHMiRgoLRmllbGRTdGFtcHMSIwoFc3RhbXAYASABKAsyFC53aGl0ZWJvYXJkLnYxLlN0YW1wEhIKCmZpZWxkX21hc2sYAiABKA0iHQoOSGlzdG9yeVJlcXVlc3QSCwoDc2VxGAEgASgEIlQKB0hpc3RvcnkSCwoDc2VxGAEgASgEEg8KB3dhbGxfbXMYAiABKAMSKwoHb2JqZWN0cxgDIAMoCzIaLndoaXRlYm9hcmQudjEuT2JqZWN0U3RhdGUiHQoOUmVzdG9yZVJlcXVlc3QSCwoDc2VxGAEgASgEKk4KBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEg8KC1JPTEVfVklFV0VSEAESDwoLUk9MRV9FRElUT1IQAhIOCgpST0xFX09XTkVSEAMqogEKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAASGgoWRVJST1JfQ09ERV9CQURfUkVRVUVTVBABEiIKHkVSUk9SX0NPREVfVU5TVVBQT1JURURfVkVSU0lPThACEh8KG0VSUk9SX0NPREVfQ0xJRU5UX0lEX0lOX1VTRRADEhgKFEVSUk9SX0NPREVfRk9SQklEREVOEAQq8QEKCVNoYXBlVHlwZRIaChZTSEFQRV9UWVBFX1VOU1BFQ0lGSUVEEAASEwoPU0hBUEVfVFlQRV9SRUNUEAESFgoSU0hBUEVfVFlQRV9FTExJUFNFEAISFQoRU0hBUEVfVFlQRV9TVElDS1kQAxITCg9TSEFQRV9UWVBFX1RFWFQQBBIUChBTSEFQRV9UWVBFX0FSUk9XEAUSFwoTU0hBUEVfVFlQRV9GUkVFSEFORBAGEhQKEFNIQVBFX1RZUEVfVElNRVIQBxITCg9TSEFQRV9UWVBFX1ZPVEUQCBIVChFTSEFQRV9UWVBFX0JBTExPVBAJQqoBChFjb20ud2hpdGVib2FyZC52MUINUHJvdG9jb2xQcm90b1ABWjF3aGl0ZWJvYXJkL2ludGVybmFsL3BiL3doaXRlYm9hcmQvdjE7d2hpdGVib2FyZHYxogIDV1hYqgINV2hpdGVib2FyZC5WMcoCDVdoaXRlYm9hcmRcVjHiAhlXaGl0ZWJvYXJkXFYxXEdQQk1ldGFkYXRh6gIOV2hpdGVib2FyZDo6VjFiBnByb3RvMw");
 
 /**
  * @generated from message whiteboard.v1.ClientMessage
@@ -108,6 +108,12 @@ export type ServerMessage = Message<"whiteboard.v1.ServerMessage"> & {
      */
     value: History;
     case: "history";
+  } | {
+    /**
+     * @generated from field: whiteboard.v1.Moved moved = 6;
+     */
+    value: Moved;
+    case: "moved";
   } | { case: undefined; value?: undefined };
 };
 
@@ -117,6 +123,26 @@ export type ServerMessage = Message<"whiteboard.v1.ServerMessage"> & {
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
   messageDesc(file_whiteboard_v1_protocol, 1);
+
+/**
+ * Another node serves this board: reconnect through /n/{node_id}/ws. Sent
+ * instead of a Welcome, then the server closes the connection.
+ *
+ * @generated from message whiteboard.v1.Moved
+ */
+export type Moved = Message<"whiteboard.v1.Moved"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message whiteboard.v1.Moved.
+ * Use `create(MovedSchema)` to create a new message.
+ */
+export const MovedSchema: GenMessage<Moved> = /*@__PURE__*/
+  messageDesc(file_whiteboard_v1_protocol, 2);
 
 /**
  * First message on every connection.
@@ -169,7 +195,7 @@ export type Hello = Message<"whiteboard.v1.Hello"> & {
  * Use `create(HelloSchema)` to create a new message.
  */
 export const HelloSchema: GenMessage<Hello> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 2);
+  messageDesc(file_whiteboard_v1_protocol, 3);
 
 /**
  * @generated from message whiteboard.v1.Welcome
@@ -231,7 +257,7 @@ export type Welcome = Message<"whiteboard.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 3);
+  messageDesc(file_whiteboard_v1_protocol, 4);
 
 /**
  * Clock-offset and RTT probe. The server echoes t0 and adds its own clock.
@@ -250,7 +276,7 @@ export type TimePing = Message<"whiteboard.v1.TimePing"> & {
  * Use `create(TimePingSchema)` to create a new message.
  */
 export const TimePingSchema: GenMessage<TimePing> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 4);
+  messageDesc(file_whiteboard_v1_protocol, 5);
 
 /**
  * @generated from message whiteboard.v1.TimePong
@@ -272,7 +298,7 @@ export type TimePong = Message<"whiteboard.v1.TimePong"> & {
  * Use `create(TimePongSchema)` to create a new message.
  */
 export const TimePongSchema: GenMessage<TimePong> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 5);
+  messageDesc(file_whiteboard_v1_protocol, 6);
 
 /**
  * @generated from message whiteboard.v1.ServerError
@@ -294,7 +320,7 @@ export type ServerError = Message<"whiteboard.v1.ServerError"> & {
  * Use `create(ServerErrorSchema)` to create a new message.
  */
 export const ServerErrorSchema: GenMessage<ServerError> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 6);
+  messageDesc(file_whiteboard_v1_protocol, 7);
 
 /**
  * Hybrid logical clock timestamp, totally ordered by (wall_ms, counter, client_id).
@@ -323,7 +349,7 @@ export type Stamp = Message<"whiteboard.v1.Stamp"> & {
  * Use `create(StampSchema)` to create a new message.
  */
 export const StampSchema: GenMessage<Stamp> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 7);
+  messageDesc(file_whiteboard_v1_protocol, 8);
 
 /**
  * Field numbers must stay below 32: FieldStamps uses them as bit positions.
@@ -459,7 +485,7 @@ export type ObjectProps = Message<"whiteboard.v1.ObjectProps"> & {
  * Use `create(ObjectPropsSchema)` to create a new message.
  */
 export const ObjectPropsSchema: GenMessage<ObjectProps> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 8);
+  messageDesc(file_whiteboard_v1_protocol, 9);
 
 /**
  * Where an arrow end attaches: a point on the target's bounding box, as
@@ -489,7 +515,7 @@ export type Binding = Message<"whiteboard.v1.Binding"> & {
  * Use `create(BindingSchema)` to create a new message.
  */
 export const BindingSchema: GenMessage<Binding> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 9);
+  messageDesc(file_whiteboard_v1_protocol, 10);
 
 /**
  * Sets every property present in props, all with the batch's stamp.
@@ -514,7 +540,7 @@ export type Op = Message<"whiteboard.v1.Op"> & {
  * Use `create(OpSchema)` to create a new message.
  */
 export const OpSchema: GenMessage<Op> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 10);
+  messageDesc(file_whiteboard_v1_protocol, 11);
 
 /**
  * One user action (e.g. dragging three shapes), applied atomically.
@@ -547,7 +573,7 @@ export type OpBatch = Message<"whiteboard.v1.OpBatch"> & {
  * Use `create(OpBatchSchema)` to create a new message.
  */
 export const OpBatchSchema: GenMessage<OpBatch> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 11);
+  messageDesc(file_whiteboard_v1_protocol, 12);
 
 /**
  * A batch as ordered by the board. stamp.client_id is the origin client.
@@ -576,7 +602,7 @@ export type SequencedBatch = Message<"whiteboard.v1.SequencedBatch"> & {
  * Use `create(SequencedBatchSchema)` to create a new message.
  */
 export const SequencedBatchSchema: GenMessage<SequencedBatch> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 12);
+  messageDesc(file_whiteboard_v1_protocol, 13);
 
 /**
  * @generated from message whiteboard.v1.Ack
@@ -620,7 +646,7 @@ export type Ack = Message<"whiteboard.v1.Ack"> & {
  * Use `create(AckSchema)` to create a new message.
  */
 export const AckSchema: GenMessage<Ack> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 13);
+  messageDesc(file_whiteboard_v1_protocol, 14);
 
 /**
  * Everything a client needs from one board tick: other clients' batches, in
@@ -683,7 +709,7 @@ export type Frame = Message<"whiteboard.v1.Frame"> & {
  * Use `create(FrameSchema)` to create a new message.
  */
 export const FrameSchema: GenMessage<Frame> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 14);
+  messageDesc(file_whiteboard_v1_protocol, 15);
 
 /**
  * The board region a client receives: its visible area plus a margin.
@@ -724,7 +750,7 @@ export type Viewport = Message<"whiteboard.v1.Viewport"> & {
  * Use `create(ViewportSchema)` to create a new message.
  */
 export const ViewportSchema: GenMessage<Viewport> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 15);
+  messageDesc(file_whiteboard_v1_protocol, 16);
 
 /**
  * Presence: the sender's pointer in board coordinates. Not persisted.
@@ -748,7 +774,7 @@ export type Cursor = Message<"whiteboard.v1.Cursor"> & {
  * Use `create(CursorSchema)` to create a new message.
  */
 export const CursorSchema: GenMessage<Cursor> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 16);
+  messageDesc(file_whiteboard_v1_protocol, 17);
 
 /**
  * @generated from message whiteboard.v1.CursorUpdate
@@ -782,7 +808,7 @@ export type CursorUpdate = Message<"whiteboard.v1.CursorUpdate"> & {
  * Use `create(CursorUpdateSchema)` to create a new message.
  */
 export const CursorUpdateSchema: GenMessage<CursorUpdate> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 17);
+  messageDesc(file_whiteboard_v1_protocol, 18);
 
 /**
  * @generated from message whiteboard.v1.ObjectState
@@ -809,7 +835,7 @@ export type ObjectState = Message<"whiteboard.v1.ObjectState"> & {
  * Use `create(ObjectStateSchema)` to create a new message.
  */
 export const ObjectStateSchema: GenMessage<ObjectState> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 18);
+  messageDesc(file_whiteboard_v1_protocol, 19);
 
 /**
  * The stamp of every property whose field number's bit is set in field_mask.
@@ -833,7 +859,7 @@ export type FieldStamps = Message<"whiteboard.v1.FieldStamps"> & {
  * Use `create(FieldStampsSchema)` to create a new message.
  */
 export const FieldStampsSchema: GenMessage<FieldStamps> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 19);
+  messageDesc(file_whiteboard_v1_protocol, 20);
 
 /**
  * Asks for the board as it was right after batch seq (0: empty board).
@@ -852,7 +878,7 @@ export type HistoryRequest = Message<"whiteboard.v1.HistoryRequest"> & {
  * Use `create(HistoryRequestSchema)` to create a new message.
  */
 export const HistoryRequestSchema: GenMessage<HistoryRequest> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 20);
+  messageDesc(file_whiteboard_v1_protocol, 21);
 
 /**
  * The board as of seq, limited to the client's viewport.
@@ -883,7 +909,7 @@ export type History = Message<"whiteboard.v1.History"> & {
  * Use `create(HistorySchema)` to create a new message.
  */
 export const HistorySchema: GenMessage<History> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 21);
+  messageDesc(file_whiteboard_v1_protocol, 22);
 
 /**
  * Makes the board look as it did at seq. The server appends the difference
@@ -904,7 +930,7 @@ export type RestoreRequest = Message<"whiteboard.v1.RestoreRequest"> & {
  * Use `create(RestoreRequestSchema)` to create a new message.
  */
 export const RestoreRequestSchema: GenMessage<RestoreRequest> = /*@__PURE__*/
-  messageDesc(file_whiteboard_v1_protocol, 22);
+  messageDesc(file_whiteboard_v1_protocol, 23);
 
 /**
  * @generated from enum whiteboard.v1.Role

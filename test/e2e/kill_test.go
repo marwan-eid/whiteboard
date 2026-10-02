@@ -4,8 +4,10 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -37,8 +39,9 @@ func compose(t *testing.T, args ...string) string {
 	return string(out)
 }
 
-// SIGKILL the node while clients edit. Clients must reconnect to the
-// restarted node, converge, and every edit the server acked must be in Postgres.
+// SIGKILL the node serving the board while clients edit, and leave it dead.
+// Clients must move to the other node once the lease runs out, converge, and
+// every edit the server acked must be in Postgres.
 func TestNodeKillLosesNoAckedEdits(t *testing.T) {
 	board := fmt.Sprintf("e2e-kill-%d", time.Now().UnixNano())
 	const nClients = 5
@@ -93,10 +96,34 @@ func TestNodeKillLosesNoAckedEdits(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second)
-	compose(t, "kill", "-s", "SIGKILL", "node-1")
+	owner := route(t, board)
+	before := make([]int, nClients)
+	for i, c := range clients {
+		before[i] = c.Stats().Connects
+	}
+	compose(t, "kill", "-s", "SIGKILL", owner)
+	killedAt := time.Now()
 	killed.Store(true)
-	time.Sleep(time.Second) // edits keep queueing while the node is down
-	compose(t, "up", "--detach", "--wait", "--wait-timeout", "60", "node-1")
+	// Bring it back for whatever runs next, once this test is done with it.
+	t.Cleanup(func() { compose(t, "up", "--detach", "--wait", "--wait-timeout", "60", owner) })
+	for {
+		back := true
+		for i, c := range clients {
+			s := c.Stats()
+			back = back && s.Connected && s.Connects > before[i]
+		}
+		if back {
+			break
+		}
+		if time.Since(killedAt) > 60*time.Second {
+			t.Fatal("clients did not fail over")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Logf("killed %s; all clients reconnected to another node after %v (lease TTL 5 s)", owner, time.Since(killedAt).Round(100*time.Millisecond))
+	if now := route(t, board); now == owner {
+		t.Fatalf("board still routed to the dead node %s", owner)
+	}
 	time.Sleep(2 * time.Second)
 	close(stop)
 	wg.Wait()
@@ -123,12 +150,12 @@ func TestNodeKillLosesNoAckedEdits(t *testing.T) {
 			for _, c := range clients {
 				t.Logf("client %d: %+v", c.ID(), c.Stats())
 			}
-			t.Fatal("clients did not settle after the restart")
+			t.Fatal("clients did not settle after the failover")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// A fresh client loads the board from the restarted node; everyone must match it.
+	// A fresh client loads the board from the new owner; everyone must match it.
 	fresh := client.New(client.Config{URL: wsURL(), BoardID: board})
 	t.Cleanup(fresh.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -167,4 +194,22 @@ func TestNodeKillLosesNoAckedEdits(t *testing.T) {
 		}
 	}
 	t.Logf("%d acked batches, all present in Postgres; %d objects on the board", total, want.Len())
+}
+
+// route asks the stack which node serves the board.
+func route(t *testing.T, board string) string {
+	t.Helper()
+	base := strings.TrimSuffix(strings.Replace(wsURL(), "ws", "http", 1), "/ws")
+	resp, err := http.Get(base + "/api/boards/" + board + "/route")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var r struct {
+		NodeID string `json:"nodeId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || r.NodeID == "" {
+		t.Fatalf("route: %v %+v", err, r)
+	}
+	return r.NodeID
 }

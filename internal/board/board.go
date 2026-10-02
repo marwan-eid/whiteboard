@@ -80,6 +80,9 @@ type Config struct {
 	// IOTimeout bounds each load, commit and snapshot write.
 	IOTimeout time.Duration
 	Now       func() time.Time
+	// Placement decides which node serves each board; nil means this node
+	// serves them all. See Registry.Run.
+	Placement Placement
 }
 
 func (c *Config) setDefaults() {
@@ -123,7 +126,12 @@ type pending struct {
 }
 
 type Board struct {
-	id      string
+	id string
+	// epoch is the lease this board was loaded under (Config.Placement).
+	epoch uint64
+	// lease is when that lease runs out as far as this node knows; the board
+	// stops serving then rather than commit as a possibly stale owner.
+	lease   *leaseClock
 	cfg     Config
 	log     *slog.Logger
 	metrics *metrics.Metrics
@@ -198,7 +206,12 @@ type closeMsg struct {
 	reply chan error
 }
 
-type crashMsg struct{}
+// crashMsg drops the board without committing or snapshotting: a test's
+// simulated crash, or a lease this node no longer holds.
+type crashMsg struct {
+	stage string
+	err   error
+}
 
 // Snapshot is the board state at a point in its history.
 type Snapshot struct {
@@ -350,12 +363,16 @@ func (b *Board) run() {
 				m.reply <- b.shutdown()
 				return
 			case crashMsg:
-				b.fail("crash", errors.New("crashed on purpose"))
+				b.fail(m.stage, m.err)
 				return
 			default:
 				b.handle(m)
 			}
 		case <-ticker.C:
+			if b.lease != nil && b.lease.expired() {
+				b.fail("lease", errLeaseExpired)
+				return
+			}
 			if err := b.flush(); err != nil {
 				b.fail("commit", err)
 				return

@@ -376,6 +376,7 @@ type ServerMessage struct {
 	//	*ServerMessage_Error
 	//	*ServerMessage_Frame
 	//	*ServerMessage_History
+	//	*ServerMessage_Moved
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -463,6 +464,15 @@ func (x *ServerMessage) GetHistory() *History {
 	return nil
 }
 
+func (x *ServerMessage) GetMoved() *Moved {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_Moved); ok {
+			return x.Moved
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -487,6 +497,10 @@ type ServerMessage_History struct {
 	History *History `protobuf:"bytes,5,opt,name=history,proto3,oneof"`
 }
 
+type ServerMessage_Moved struct {
+	Moved *Moved `protobuf:"bytes,6,opt,name=moved,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Msg() {}
 
 func (*ServerMessage_TimePong) isServerMessage_Msg() {}
@@ -496,6 +510,54 @@ func (*ServerMessage_Error) isServerMessage_Msg() {}
 func (*ServerMessage_Frame) isServerMessage_Msg() {}
 
 func (*ServerMessage_History) isServerMessage_Msg() {}
+
+func (*ServerMessage_Moved) isServerMessage_Msg() {}
+
+// Another node serves this board: reconnect through /n/{node_id}/ws. Sent
+// instead of a Welcome, then the server closes the connection.
+type Moved struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Moved) Reset() {
+	*x = Moved{}
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Moved) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Moved) ProtoMessage() {}
+
+func (x *Moved) ProtoReflect() protoreflect.Message {
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Moved.ProtoReflect.Descriptor instead.
+func (*Moved) Descriptor() ([]byte, []int) {
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Moved) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
 
 // First message on every connection.
 type Hello struct {
@@ -517,7 +579,7 @@ type Hello struct {
 
 func (x *Hello) Reset() {
 	*x = Hello{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[2]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -529,7 +591,7 @@ func (x *Hello) String() string {
 func (*Hello) ProtoMessage() {}
 
 func (x *Hello) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[2]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -542,7 +604,7 @@ func (x *Hello) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hello.ProtoReflect.Descriptor instead.
 func (*Hello) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{2}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Hello) GetProtocolVersion() uint32 {
@@ -609,7 +671,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[3]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +683,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[3]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +696,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{3}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Welcome) GetProtocolVersion() uint32 {
@@ -703,7 +765,7 @@ type TimePing struct {
 
 func (x *TimePing) Reset() {
 	*x = TimePing{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[4]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -715,7 +777,7 @@ func (x *TimePing) String() string {
 func (*TimePing) ProtoMessage() {}
 
 func (x *TimePing) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[4]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -728,7 +790,7 @@ func (x *TimePing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimePing.ProtoReflect.Descriptor instead.
 func (*TimePing) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{4}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TimePing) GetT0() float64 {
@@ -748,7 +810,7 @@ type TimePong struct {
 
 func (x *TimePong) Reset() {
 	*x = TimePong{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[5]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +822,7 @@ func (x *TimePong) String() string {
 func (*TimePong) ProtoMessage() {}
 
 func (x *TimePong) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[5]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +835,7 @@ func (x *TimePong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimePong.ProtoReflect.Descriptor instead.
 func (*TimePong) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{5}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TimePong) GetT0() float64 {
@@ -800,7 +862,7 @@ type ServerError struct {
 
 func (x *ServerError) Reset() {
 	*x = ServerError{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[6]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -812,7 +874,7 @@ func (x *ServerError) String() string {
 func (*ServerError) ProtoMessage() {}
 
 func (x *ServerError) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[6]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -825,7 +887,7 @@ func (x *ServerError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerError.ProtoReflect.Descriptor instead.
 func (*ServerError) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{6}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ServerError) GetCode() ErrorCode {
@@ -854,7 +916,7 @@ type Stamp struct {
 
 func (x *Stamp) Reset() {
 	*x = Stamp{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[7]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -866,7 +928,7 @@ func (x *Stamp) String() string {
 func (*Stamp) ProtoMessage() {}
 
 func (x *Stamp) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[7]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -879,7 +941,7 @@ func (x *Stamp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stamp.ProtoReflect.Descriptor instead.
 func (*Stamp) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{7}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Stamp) GetWallMs() int64 {
@@ -944,7 +1006,7 @@ type ObjectProps struct {
 
 func (x *ObjectProps) Reset() {
 	*x = ObjectProps{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[8]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -956,7 +1018,7 @@ func (x *ObjectProps) String() string {
 func (*ObjectProps) ProtoMessage() {}
 
 func (x *ObjectProps) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[8]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -969,7 +1031,7 @@ func (x *ObjectProps) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObjectProps.ProtoReflect.Descriptor instead.
 func (*ObjectProps) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{8}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ObjectProps) GetType() ShapeType {
@@ -1125,7 +1187,7 @@ type Binding struct {
 
 func (x *Binding) Reset() {
 	*x = Binding{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[9]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1137,7 +1199,7 @@ func (x *Binding) String() string {
 func (*Binding) ProtoMessage() {}
 
 func (x *Binding) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[9]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1150,7 +1212,7 @@ func (x *Binding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Binding.ProtoReflect.Descriptor instead.
 func (*Binding) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{9}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Binding) GetObjectId() string {
@@ -1186,7 +1248,7 @@ type Op struct {
 
 func (x *Op) Reset() {
 	*x = Op{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[10]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1198,7 +1260,7 @@ func (x *Op) String() string {
 func (*Op) ProtoMessage() {}
 
 func (x *Op) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[10]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1211,7 +1273,7 @@ func (x *Op) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Op.ProtoReflect.Descriptor instead.
 func (*Op) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{10}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Op) GetId() string {
@@ -1242,7 +1304,7 @@ type OpBatch struct {
 
 func (x *OpBatch) Reset() {
 	*x = OpBatch{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[11]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1254,7 +1316,7 @@ func (x *OpBatch) String() string {
 func (*OpBatch) ProtoMessage() {}
 
 func (x *OpBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[11]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1267,7 +1329,7 @@ func (x *OpBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpBatch.ProtoReflect.Descriptor instead.
 func (*OpBatch) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{11}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *OpBatch) GetClientSeq() uint64 {
@@ -1303,7 +1365,7 @@ type SequencedBatch struct {
 
 func (x *SequencedBatch) Reset() {
 	*x = SequencedBatch{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[12]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1315,7 +1377,7 @@ func (x *SequencedBatch) String() string {
 func (*SequencedBatch) ProtoMessage() {}
 
 func (x *SequencedBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[12]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1328,7 +1390,7 @@ func (x *SequencedBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SequencedBatch.ProtoReflect.Descriptor instead.
 func (*SequencedBatch) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{12}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SequencedBatch) GetSeq() uint64 {
@@ -1369,7 +1431,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[13]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1381,7 +1443,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[13]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1394,7 +1456,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{13}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Ack) GetClientSeq() uint64 {
@@ -1457,7 +1519,7 @@ type Frame struct {
 
 func (x *Frame) Reset() {
 	*x = Frame{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[14]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1469,7 +1531,7 @@ func (x *Frame) String() string {
 func (*Frame) ProtoMessage() {}
 
 func (x *Frame) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[14]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1482,7 +1544,7 @@ func (x *Frame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Frame.ProtoReflect.Descriptor instead.
 func (*Frame) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{14}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Frame) GetBatches() []*SequencedBatch {
@@ -1550,7 +1612,7 @@ type Viewport struct {
 
 func (x *Viewport) Reset() {
 	*x = Viewport{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[15]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1562,7 +1624,7 @@ func (x *Viewport) String() string {
 func (*Viewport) ProtoMessage() {}
 
 func (x *Viewport) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[15]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1575,7 +1637,7 @@ func (x *Viewport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Viewport.ProtoReflect.Descriptor instead.
 func (*Viewport) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{15}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Viewport) GetX() float64 {
@@ -1624,7 +1686,7 @@ type Cursor struct {
 
 func (x *Cursor) Reset() {
 	*x = Cursor{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[16]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1698,7 @@ func (x *Cursor) String() string {
 func (*Cursor) ProtoMessage() {}
 
 func (x *Cursor) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[16]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1711,7 @@ func (x *Cursor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Cursor.ProtoReflect.Descriptor instead.
 func (*Cursor) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{16}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Cursor) GetX() float64 {
@@ -1679,7 +1741,7 @@ type CursorUpdate struct {
 
 func (x *CursorUpdate) Reset() {
 	*x = CursorUpdate{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[17]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1691,7 +1753,7 @@ func (x *CursorUpdate) String() string {
 func (*CursorUpdate) ProtoMessage() {}
 
 func (x *CursorUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[17]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1704,7 +1766,7 @@ func (x *CursorUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CursorUpdate.ProtoReflect.Descriptor instead.
 func (*CursorUpdate) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{17}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CursorUpdate) GetClientId() uint64 {
@@ -1746,7 +1808,7 @@ type ObjectState struct {
 
 func (x *ObjectState) Reset() {
 	*x = ObjectState{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[18]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1758,7 +1820,7 @@ func (x *ObjectState) String() string {
 func (*ObjectState) ProtoMessage() {}
 
 func (x *ObjectState) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[18]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1771,7 +1833,7 @@ func (x *ObjectState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObjectState.ProtoReflect.Descriptor instead.
 func (*ObjectState) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{18}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ObjectState) GetId() string {
@@ -1806,7 +1868,7 @@ type FieldStamps struct {
 
 func (x *FieldStamps) Reset() {
 	*x = FieldStamps{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[19]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1818,7 +1880,7 @@ func (x *FieldStamps) String() string {
 func (*FieldStamps) ProtoMessage() {}
 
 func (x *FieldStamps) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[19]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1831,7 +1893,7 @@ func (x *FieldStamps) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldStamps.ProtoReflect.Descriptor instead.
 func (*FieldStamps) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{19}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *FieldStamps) GetStamp() *Stamp {
@@ -1858,7 +1920,7 @@ type HistoryRequest struct {
 
 func (x *HistoryRequest) Reset() {
 	*x = HistoryRequest{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1870,7 +1932,7 @@ func (x *HistoryRequest) String() string {
 func (*HistoryRequest) ProtoMessage() {}
 
 func (x *HistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[20]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1883,7 +1945,7 @@ func (x *HistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryRequest.ProtoReflect.Descriptor instead.
 func (*HistoryRequest) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{20}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *HistoryRequest) GetSeq() uint64 {
@@ -1906,7 +1968,7 @@ type History struct {
 
 func (x *History) Reset() {
 	*x = History{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1918,7 +1980,7 @@ func (x *History) String() string {
 func (*History) ProtoMessage() {}
 
 func (x *History) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[21]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1931,7 +1993,7 @@ func (x *History) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use History.ProtoReflect.Descriptor instead.
 func (*History) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{21}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *History) GetSeq() uint64 {
@@ -1967,7 +2029,7 @@ type RestoreRequest struct {
 
 func (x *RestoreRequest) Reset() {
 	*x = RestoreRequest{}
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1979,7 +2041,7 @@ func (x *RestoreRequest) String() string {
 func (*RestoreRequest) ProtoMessage() {}
 
 func (x *RestoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_whiteboard_v1_protocol_proto_msgTypes[22]
+	mi := &file_whiteboard_v1_protocol_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1992,7 +2054,7 @@ func (x *RestoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreRequest.ProtoReflect.Descriptor instead.
 func (*RestoreRequest) Descriptor() ([]byte, []int) {
-	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{22}
+	return file_whiteboard_v1_protocol_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RestoreRequest) GetSeq() uint64 {
@@ -2015,14 +2077,17 @@ const file_whiteboard_v1_protocol_proto_rawDesc = "" +
 	"\bviewport\x18\x05 \x01(\v2\x17.whiteboard.v1.ViewportH\x00R\bviewport\x129\n" +
 	"\ahistory\x18\x06 \x01(\v2\x1d.whiteboard.v1.HistoryRequestH\x00R\ahistory\x129\n" +
 	"\arestore\x18\a \x01(\v2\x1d.whiteboard.v1.RestoreRequestH\x00R\arestoreB\x05\n" +
-	"\x03msg\"\x98\x02\n" +
+	"\x03msg\"\xc6\x02\n" +
 	"\rServerMessage\x122\n" +
 	"\awelcome\x18\x01 \x01(\v2\x16.whiteboard.v1.WelcomeH\x00R\awelcome\x126\n" +
 	"\ttime_pong\x18\x02 \x01(\v2\x17.whiteboard.v1.TimePongH\x00R\btimePong\x122\n" +
 	"\x05error\x18\x03 \x01(\v2\x1a.whiteboard.v1.ServerErrorH\x00R\x05error\x12,\n" +
 	"\x05frame\x18\x04 \x01(\v2\x14.whiteboard.v1.FrameH\x00R\x05frame\x122\n" +
-	"\ahistory\x18\x05 \x01(\v2\x16.whiteboard.v1.HistoryH\x00R\ahistoryB\x05\n" +
-	"\x03msg\"\xe1\x01\n" +
+	"\ahistory\x18\x05 \x01(\v2\x16.whiteboard.v1.HistoryH\x00R\ahistory\x12,\n" +
+	"\x05moved\x18\x06 \x01(\v2\x14.whiteboard.v1.MovedH\x00R\x05movedB\x05\n" +
+	"\x03msg\" \n" +
+	"\x05Moved\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\xe1\x01\n" +
 	"\x05Hello\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x19\n" +
 	"\bboard_id\x18\x02 \x01(\tR\aboardId\x12\x1b\n" +
@@ -2199,74 +2264,76 @@ func file_whiteboard_v1_protocol_proto_rawDescGZIP() []byte {
 }
 
 var file_whiteboard_v1_protocol_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_whiteboard_v1_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_whiteboard_v1_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_whiteboard_v1_protocol_proto_goTypes = []any{
 	(Role)(0),              // 0: whiteboard.v1.Role
 	(ErrorCode)(0),         // 1: whiteboard.v1.ErrorCode
 	(ShapeType)(0),         // 2: whiteboard.v1.ShapeType
 	(*ClientMessage)(nil),  // 3: whiteboard.v1.ClientMessage
 	(*ServerMessage)(nil),  // 4: whiteboard.v1.ServerMessage
-	(*Hello)(nil),          // 5: whiteboard.v1.Hello
-	(*Welcome)(nil),        // 6: whiteboard.v1.Welcome
-	(*TimePing)(nil),       // 7: whiteboard.v1.TimePing
-	(*TimePong)(nil),       // 8: whiteboard.v1.TimePong
-	(*ServerError)(nil),    // 9: whiteboard.v1.ServerError
-	(*Stamp)(nil),          // 10: whiteboard.v1.Stamp
-	(*ObjectProps)(nil),    // 11: whiteboard.v1.ObjectProps
-	(*Binding)(nil),        // 12: whiteboard.v1.Binding
-	(*Op)(nil),             // 13: whiteboard.v1.Op
-	(*OpBatch)(nil),        // 14: whiteboard.v1.OpBatch
-	(*SequencedBatch)(nil), // 15: whiteboard.v1.SequencedBatch
-	(*Ack)(nil),            // 16: whiteboard.v1.Ack
-	(*Frame)(nil),          // 17: whiteboard.v1.Frame
-	(*Viewport)(nil),       // 18: whiteboard.v1.Viewport
-	(*Cursor)(nil),         // 19: whiteboard.v1.Cursor
-	(*CursorUpdate)(nil),   // 20: whiteboard.v1.CursorUpdate
-	(*ObjectState)(nil),    // 21: whiteboard.v1.ObjectState
-	(*FieldStamps)(nil),    // 22: whiteboard.v1.FieldStamps
-	(*HistoryRequest)(nil), // 23: whiteboard.v1.HistoryRequest
-	(*History)(nil),        // 24: whiteboard.v1.History
-	(*RestoreRequest)(nil), // 25: whiteboard.v1.RestoreRequest
+	(*Moved)(nil),          // 5: whiteboard.v1.Moved
+	(*Hello)(nil),          // 6: whiteboard.v1.Hello
+	(*Welcome)(nil),        // 7: whiteboard.v1.Welcome
+	(*TimePing)(nil),       // 8: whiteboard.v1.TimePing
+	(*TimePong)(nil),       // 9: whiteboard.v1.TimePong
+	(*ServerError)(nil),    // 10: whiteboard.v1.ServerError
+	(*Stamp)(nil),          // 11: whiteboard.v1.Stamp
+	(*ObjectProps)(nil),    // 12: whiteboard.v1.ObjectProps
+	(*Binding)(nil),        // 13: whiteboard.v1.Binding
+	(*Op)(nil),             // 14: whiteboard.v1.Op
+	(*OpBatch)(nil),        // 15: whiteboard.v1.OpBatch
+	(*SequencedBatch)(nil), // 16: whiteboard.v1.SequencedBatch
+	(*Ack)(nil),            // 17: whiteboard.v1.Ack
+	(*Frame)(nil),          // 18: whiteboard.v1.Frame
+	(*Viewport)(nil),       // 19: whiteboard.v1.Viewport
+	(*Cursor)(nil),         // 20: whiteboard.v1.Cursor
+	(*CursorUpdate)(nil),   // 21: whiteboard.v1.CursorUpdate
+	(*ObjectState)(nil),    // 22: whiteboard.v1.ObjectState
+	(*FieldStamps)(nil),    // 23: whiteboard.v1.FieldStamps
+	(*HistoryRequest)(nil), // 24: whiteboard.v1.HistoryRequest
+	(*History)(nil),        // 25: whiteboard.v1.History
+	(*RestoreRequest)(nil), // 26: whiteboard.v1.RestoreRequest
 }
 var file_whiteboard_v1_protocol_proto_depIdxs = []int32{
-	5,  // 0: whiteboard.v1.ClientMessage.hello:type_name -> whiteboard.v1.Hello
-	7,  // 1: whiteboard.v1.ClientMessage.time_ping:type_name -> whiteboard.v1.TimePing
-	14, // 2: whiteboard.v1.ClientMessage.op_batch:type_name -> whiteboard.v1.OpBatch
-	19, // 3: whiteboard.v1.ClientMessage.cursor:type_name -> whiteboard.v1.Cursor
-	18, // 4: whiteboard.v1.ClientMessage.viewport:type_name -> whiteboard.v1.Viewport
-	23, // 5: whiteboard.v1.ClientMessage.history:type_name -> whiteboard.v1.HistoryRequest
-	25, // 6: whiteboard.v1.ClientMessage.restore:type_name -> whiteboard.v1.RestoreRequest
-	6,  // 7: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
-	8,  // 8: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
-	9,  // 9: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
-	17, // 10: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
-	24, // 11: whiteboard.v1.ServerMessage.history:type_name -> whiteboard.v1.History
-	18, // 12: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
-	21, // 13: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
-	0,  // 14: whiteboard.v1.Welcome.role:type_name -> whiteboard.v1.Role
-	1,  // 15: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
-	2,  // 16: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
-	12, // 17: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
-	12, // 18: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
-	11, // 19: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
-	10, // 20: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
-	13, // 21: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
-	10, // 22: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
-	13, // 23: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
-	10, // 24: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
-	15, // 25: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
-	16, // 26: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
-	20, // 27: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
-	21, // 28: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
-	11, // 29: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
-	22, // 30: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
-	10, // 31: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
-	21, // 32: whiteboard.v1.History.objects:type_name -> whiteboard.v1.ObjectState
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	6,  // 0: whiteboard.v1.ClientMessage.hello:type_name -> whiteboard.v1.Hello
+	8,  // 1: whiteboard.v1.ClientMessage.time_ping:type_name -> whiteboard.v1.TimePing
+	15, // 2: whiteboard.v1.ClientMessage.op_batch:type_name -> whiteboard.v1.OpBatch
+	20, // 3: whiteboard.v1.ClientMessage.cursor:type_name -> whiteboard.v1.Cursor
+	19, // 4: whiteboard.v1.ClientMessage.viewport:type_name -> whiteboard.v1.Viewport
+	24, // 5: whiteboard.v1.ClientMessage.history:type_name -> whiteboard.v1.HistoryRequest
+	26, // 6: whiteboard.v1.ClientMessage.restore:type_name -> whiteboard.v1.RestoreRequest
+	7,  // 7: whiteboard.v1.ServerMessage.welcome:type_name -> whiteboard.v1.Welcome
+	9,  // 8: whiteboard.v1.ServerMessage.time_pong:type_name -> whiteboard.v1.TimePong
+	10, // 9: whiteboard.v1.ServerMessage.error:type_name -> whiteboard.v1.ServerError
+	18, // 10: whiteboard.v1.ServerMessage.frame:type_name -> whiteboard.v1.Frame
+	25, // 11: whiteboard.v1.ServerMessage.history:type_name -> whiteboard.v1.History
+	5,  // 12: whiteboard.v1.ServerMessage.moved:type_name -> whiteboard.v1.Moved
+	19, // 13: whiteboard.v1.Hello.viewport:type_name -> whiteboard.v1.Viewport
+	22, // 14: whiteboard.v1.Welcome.objects:type_name -> whiteboard.v1.ObjectState
+	0,  // 15: whiteboard.v1.Welcome.role:type_name -> whiteboard.v1.Role
+	1,  // 16: whiteboard.v1.ServerError.code:type_name -> whiteboard.v1.ErrorCode
+	2,  // 17: whiteboard.v1.ObjectProps.type:type_name -> whiteboard.v1.ShapeType
+	13, // 18: whiteboard.v1.ObjectProps.from:type_name -> whiteboard.v1.Binding
+	13, // 19: whiteboard.v1.ObjectProps.to:type_name -> whiteboard.v1.Binding
+	12, // 20: whiteboard.v1.Op.props:type_name -> whiteboard.v1.ObjectProps
+	11, // 21: whiteboard.v1.OpBatch.stamp:type_name -> whiteboard.v1.Stamp
+	14, // 22: whiteboard.v1.OpBatch.ops:type_name -> whiteboard.v1.Op
+	11, // 23: whiteboard.v1.SequencedBatch.stamp:type_name -> whiteboard.v1.Stamp
+	14, // 24: whiteboard.v1.SequencedBatch.ops:type_name -> whiteboard.v1.Op
+	11, // 25: whiteboard.v1.Ack.stamp:type_name -> whiteboard.v1.Stamp
+	16, // 26: whiteboard.v1.Frame.batches:type_name -> whiteboard.v1.SequencedBatch
+	17, // 27: whiteboard.v1.Frame.acks:type_name -> whiteboard.v1.Ack
+	21, // 28: whiteboard.v1.Frame.cursors:type_name -> whiteboard.v1.CursorUpdate
+	22, // 29: whiteboard.v1.Frame.objects:type_name -> whiteboard.v1.ObjectState
+	12, // 30: whiteboard.v1.ObjectState.props:type_name -> whiteboard.v1.ObjectProps
+	23, // 31: whiteboard.v1.ObjectState.stamps:type_name -> whiteboard.v1.FieldStamps
+	11, // 32: whiteboard.v1.FieldStamps.stamp:type_name -> whiteboard.v1.Stamp
+	22, // 33: whiteboard.v1.History.objects:type_name -> whiteboard.v1.ObjectState
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_whiteboard_v1_protocol_proto_init() }
@@ -2289,16 +2356,17 @@ func file_whiteboard_v1_protocol_proto_init() {
 		(*ServerMessage_Error)(nil),
 		(*ServerMessage_Frame)(nil),
 		(*ServerMessage_History)(nil),
+		(*ServerMessage_Moved)(nil),
 	}
-	file_whiteboard_v1_protocol_proto_msgTypes[8].OneofWrappers = []any{}
-	file_whiteboard_v1_protocol_proto_msgTypes[14].OneofWrappers = []any{}
+	file_whiteboard_v1_protocol_proto_msgTypes[9].OneofWrappers = []any{}
+	file_whiteboard_v1_protocol_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_whiteboard_v1_protocol_proto_rawDesc), len(file_whiteboard_v1_protocol_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

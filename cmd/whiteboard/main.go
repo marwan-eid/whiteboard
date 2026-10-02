@@ -23,6 +23,7 @@ import (
 
 	"whiteboard/internal/access"
 	"whiteboard/internal/board"
+	"whiteboard/internal/cluster"
 	"whiteboard/internal/config"
 	"whiteboard/internal/db"
 	"whiteboard/internal/gateway"
@@ -81,8 +82,24 @@ func run() error {
 	signer := access.NewSigner(secret)
 	accessStore := access.NewPostgres(pool)
 
+	// Membership and board leases (ADR-0005). A single node works the same way:
+	// it is the only live node, so it serves every board.
+	node := cluster.New(cluster.Config{NodeID: cfg.NodeID, Addr: cfg.Addr}, pool, log)
+	if err := node.Join(ctx); err != nil {
+		return fmt.Errorf("join cluster: %w", err)
+	}
+	clusterCtx, leaveCluster := context.WithCancel(context.Background())
+	defer leaveCluster()
+	left := make(chan struct{})
+	go func() {
+		node.Run(clusterCtx)
+		close(left)
+	}()
+
 	m := metrics.New()
-	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st}, log, m)
+	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st, Placement: node}, log, m)
+	go boards.Run(clusterCtx)
+	go node.Listen(clusterCtx, boards.KickLink)
 	gw := gateway.New(gateway.Config{
 		Authorizer: accessStore,
 		Signer:     signer,
@@ -92,16 +109,24 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Gateway:  gw,
-			Metrics:  m,
-			Ready:    pool.Ping,
-			Signer:   signer,
-			Boards:   accessStore,
-			KickLink: boards.KickLink,
+			Gateway: gw,
+			Metrics: m,
+			Ready:   pool.Ping,
+			Signer:  signer,
+			Boards:  accessStore,
+			KickLink: func(boardID, linkID string) {
+				// The board may live on another node: tell them all.
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := node.KickLink(ctx, boardID, linkID); err != nil {
+					log.Warn("announcing a revoked link failed", "board", boardID, "err", err)
+				}
+			},
 			// 30 new private boards an hour per IP, 10 at once.
 			BoardCreates: ratelimit.NewKeyed(rate.Every(2*time.Minute), 10),
 			TrustProxy:   cfg.TrustProxy,
 			NodeID:       cfg.NodeID,
+			Route:        node.Route,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -119,6 +144,11 @@ func run() error {
 	}
 
 	log.Info("shutting down")
+	// Leave first, so new clients are routed elsewhere; closing the boards
+	// then releases their leases for the other nodes to take.
+	leaveCluster()
+	<-left
+	node.Leave()
 	gw.Shutdown()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

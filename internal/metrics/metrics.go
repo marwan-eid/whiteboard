@@ -43,6 +43,8 @@ type Metrics struct {
 	// SyncServerLatency is from a batch arriving until its frames are queued
 	// (includes waiting for the tick and the commit).
 	SyncServerLatency prometheus.Histogram
+	// ClientsMoved counts connections sent to the node that serves their board.
+	ClientsMoved prometheus.Counter
 	// Live feeds the public stats panel.
 	Live *Live
 }
@@ -60,6 +62,10 @@ func New() *Metrics {
 			Name: "ws_messages_in_total",
 			Help: "Client messages received, by message type.",
 		}, []string{"type"}),
+		ClientsMoved: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "clients_moved_total",
+			Help: "Connections redirected to the node that serves their board.",
+		}),
 		Throttled: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "ws_throttled_total",
 			Help: "Client messages delayed by a per-connection rate limit, by limit (batches, ops, bytes).",
@@ -137,7 +143,7 @@ func New() *Metrics {
 	reg.MustRegister(
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		m.WSConnections, m.WSMessagesIn, m.Throttled, m.LimitRejections,
+		m.WSConnections, m.WSMessagesIn, m.Throttled, m.LimitRejections, m.ClientsMoved,
 		m.BoardsActive, m.BatchesApplied, m.BatchesRejected, m.StampsClamped,
 		m.ClientsKicked, m.TickDuration,
 		m.CommitDuration, m.BoardLoadDuration, m.SnapshotDuration,
