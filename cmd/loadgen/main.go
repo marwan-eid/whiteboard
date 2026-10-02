@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -103,8 +104,22 @@ func run() int {
 	flag.Float64Var(&cfg.Area, "area", cfg.Area, "side of the square board area editors spread over")
 	flag.Uint64Var(&cfg.Seed, "seed", uint64(time.Now().UnixNano()), "random seed")
 	flag.StringVar(&out, "json", "", "also write the summary as JSON to this file")
+	var cpuprofile string
 	flag.StringVar(&hlog, "hlog", "", "also write the latency histogram (HdrHistogram log, microseconds) to this file")
+	flag.StringVar(&cpuprofile, "cpuprofile", "", "write a CPU profile of the load generator to this file")
 	flag.Parse()
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

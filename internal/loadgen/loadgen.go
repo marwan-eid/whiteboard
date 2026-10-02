@@ -192,6 +192,8 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 	hist = newHistogram()
 	c := client.New(client.Config{
 		URL: cfg.URL, BoardID: cfg.BoardID, Reconnect: true, Viewport: view,
+		// Only timings matter here; keeping replicas would load the generator, not the server.
+		StampsOnly: true,
 		OnFrame: func(f *pb.Frame) {
 			now := time.Now()
 			if now.Before(measureFrom) {

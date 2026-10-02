@@ -42,6 +42,10 @@ type Config struct {
 	// NodeURL is where to reach a node after the server answers Moved. The
 	// default puts /n/{node}/ws on URL's host (how Caddy routes to a node).
 	NodeURL func(node string) string
+	// StampsOnly skips applying other clients' edits to the replica (and
+	// tracking their cursors); frames still go to OnFrame. For load
+	// generation, where only timings matter and the replica is pure cost.
+	StampsOnly bool
 }
 
 // ErrOffline is returned when an operation needs a connection the client doesn't have.
@@ -401,7 +405,7 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		for _, op := range b.GetOps() {
 			// Deltas only apply to objects we hold; the server sends objects
 			// that come into view in full (f.Objects).
-			if c.held[op.GetId()] {
+			if c.held[op.GetId()] && !c.cfg.StampsOnly {
 				c.doc.Apply(op, st)
 			}
 		}
@@ -418,13 +422,18 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		}
 	}
 	for _, s := range f.GetObjects() {
-		c.doc.MergeState(s)
+		if !c.cfg.StampsOnly {
+			c.doc.MergeState(s)
+		}
 		c.held[s.GetId()] = true
 		for _, fs := range s.GetStamps() {
 			c.clock.Observe(hlc.FromProto(fs.GetStamp()))
 		}
 	}
 	for _, cu := range f.GetCursors() {
+		if c.cfg.StampsOnly {
+			break
+		}
 		if cu.GetGone() {
 			delete(c.cursors, cu.GetClientId())
 		} else {
