@@ -57,3 +57,9 @@ variable "backup_retention_days" {
   type    = number
   default = 14
 }
+
+variable "fallback_micro" {
+  type        = bool
+  description = "Run the reduced demo on the free AMD Micro VM (ADR-0006), e.g. while A1 capacity is unavailable."
+  default     = false
+}

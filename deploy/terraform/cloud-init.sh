@@ -6,6 +6,16 @@
 set -euxo pipefail
 exec > >(tee -a /var/log/whiteboard-setup.log) 2>&1
 
+# Small machines (the 1 GB Micro VM) get swap, so a burst does not get the
+# database killed.
+if [ "${swap_gb}" -gt 0 ] && [ ! -f /swapfile ]; then
+  fallocate -l ${swap_gb}G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+
 # Oracle's Ubuntu images reject everything but SSH in iptables, on top of the
 # VCN security list. Let HTTP, HTTPS and HTTP/3 in, and keep it across reboots.
 iptables -I INPUT -p tcp -m state --state NEW -m multiport --dports 80,443 -j ACCEPT
@@ -49,6 +59,12 @@ BACKUP_AT=03:00
 ENV
 chown ubuntu:ubuntu .env
 
-docker compose -f compose.yaml -f deploy/compose.prod.yaml pull
-docker compose -f compose.yaml -f deploy/compose.prod.yaml up -d
+compose="docker compose ${compose_files}"
+$compose pull ${services}
+$compose up -d ${services}
+# Remember how this machine runs the stack, for deploy/update.sh.
+cat > /etc/whiteboard.conf <<CONF
+COMPOSE_FILES="${compose_files}"
+SERVICES="${services}"
+CONF
 echo "whiteboard: up at https://$site"

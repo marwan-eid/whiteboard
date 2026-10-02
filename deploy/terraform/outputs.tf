@@ -18,3 +18,11 @@ output "grafana_admin_password" {
 output "backup_bucket" {
   value = oci_objectstorage_bucket.backups.name
 }
+
+output "fallback_url" {
+  value = var.fallback_micro ? "https://${replace(oci_core_instance.fallback[0].public_ip, ".", "-")}.sslip.io" : null
+}
+
+output "fallback_ssh" {
+  value = var.fallback_micro ? "ssh ubuntu@${oci_core_instance.fallback[0].public_ip}" : null
+}

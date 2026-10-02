@@ -135,16 +135,11 @@ resource "oci_core_instance" "demo" {
   }
   metadata = {
     ssh_authorized_keys = file(var.ssh_public_key_path)
-    user_data = base64encode(templatefile("${path.module}/cloud-init.sh", {
-      repo_url          = var.repo_url
-      image_tag         = var.image_tag
-      site_address      = var.site_address
-      duckdns_token     = var.duckdns_token
-      secret            = random_password.secret.result
-      postgres_password = random_password.postgres.result
-      grafana_password  = random_password.grafana.result
-      backup_url        = local.backup_upload_url
-    }))
+    user_data = base64encode(templatefile("${path.module}/cloud-init.sh", merge(local.setup, {
+      compose_files = "-f compose.yaml -f deploy/compose.prod.yaml"
+      services      = "" # all of them
+      swap_gb       = 0
+    })))
   }
   # A newer image or an edited setup script must not silently replace the demo.
   lifecycle {
@@ -204,4 +199,61 @@ resource "oci_objectstorage_preauthrequest" "upload" {
 
 locals {
   backup_upload_url = "https://objectstorage.${var.region}.oraclecloud.com${oci_objectstorage_preauthrequest.upload.access_uri}"
+}
+
+locals {
+  # Values every machine's first-boot script gets (cloud-init.sh).
+  setup = {
+    repo_url          = var.repo_url
+    image_tag         = var.image_tag
+    site_address      = var.site_address
+    duckdns_token     = var.duckdns_token
+    secret            = random_password.secret.result
+    postgres_password = random_password.postgres.result
+    grafana_password  = random_password.grafana.result
+    backup_url        = local.backup_upload_url
+  }
+}
+
+# --- fallback: the free AMD Micro VM -----------------------------------------
+# ADR-0006: while A1 capacity is unavailable, a reduced demo runs on the
+# second Always Free Micro VM (1 GB RAM): one node, Postgres, Caddy and
+# backups (deploy/compose.small.yaml). Turn it off with fallback_micro = false
+# once the A1 VM serves the demo.
+
+data "oci_core_images" "ubuntu_x86" {
+  compartment_id           = var.tenancy_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = "24.04"
+  shape                    = "VM.Standard.E2.1.Micro"
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
+resource "oci_core_instance" "fallback" {
+  count               = var.fallback_micro ? 1 : 0
+  compartment_id      = local.compartment
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  display_name        = "whiteboard-fallback"
+  shape               = "VM.Standard.E2.1.Micro"
+  source_details {
+    source_type             = "image"
+    source_id               = data.oci_core_images.ubuntu_x86.images[0].id
+    boot_volume_size_in_gbs = 50
+  }
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public.id
+    assign_public_ip = true
+  }
+  metadata = {
+    ssh_authorized_keys = file(var.ssh_public_key_path)
+    user_data = base64encode(templatefile("${path.module}/cloud-init.sh", merge(local.setup, {
+      compose_files = "-f compose.yaml -f deploy/compose.prod.yaml -f deploy/compose.small.yaml"
+      services      = "postgres node-1 web backup"
+      swap_gb       = 2
+    })))
+  }
+  lifecycle {
+    ignore_changes = [source_details[0].source_id, metadata]
+  }
 }
