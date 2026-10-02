@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -26,6 +27,9 @@ type Config struct {
 	// MaxConnsPerIP caps open WebSockets per client IP (MAX_CONNS_PER_IP,
 	// default 64; 0 means no limit, for load tests from one machine).
 	MaxConnsPerIP int
+	// Tick is how often each board commits and sends frames (TICK, default
+	// 20ms). Longer ticks mean fewer, larger frames per client.
+	Tick time.Duration
 	// TrustProxy takes the client IP from the last X-Forwarded-For entry,
 	// appended by the reverse proxy (TRUST_PROXY=true). Set it only when the
 	// node is reachable solely through that proxy.
@@ -72,6 +76,13 @@ func Load(getenv func(string) string, hostname func() (string, error)) (Config, 
 			return Config{}, fmt.Errorf("invalid TRUST_PROXY %q", v)
 		}
 		cfg.TrustProxy = b
+	}
+	if v := getenv("TICK"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Millisecond {
+			return Config{}, fmt.Errorf("invalid TICK %q", v)
+		}
+		cfg.Tick = d
 	}
 	if lvl := getenv("LOG_LEVEL"); lvl != "" {
 		if err := cfg.LogLevel.UnmarshalText([]byte(strings.ToLower(lvl))); err != nil {

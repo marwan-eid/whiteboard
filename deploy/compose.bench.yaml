@@ -14,3 +14,5 @@ services:
       DATABASE_URL: postgres://whiteboard:${POSTGRES_PASSWORD:-whiteboard}@127.0.0.1:5432/whiteboard?sslmode=disable
       # Every simulated editor comes from one address.
       MAX_CONNS_PER_IP: "0"
+      # Board tick (20ms by default); the bench workflow can vary it.
+      TICK: ${TICK:-20ms}

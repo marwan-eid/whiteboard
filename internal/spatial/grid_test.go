@@ -2,8 +2,11 @@ package spatial
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"sort"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 )
@@ -78,18 +81,29 @@ func TestEverythingQueryAndEarlyStop(t *testing.T) {
 	}
 }
 
+// Viewport queries on a 100k-object grid board (docs/BENCHMARKS.md target 2,
+// server side), at random positions, with the board's grid settings. It
+// reports p50 and p99 per query as well as the mean.
 func BenchmarkQueryViewport100k(b *testing.B) {
-	g := NewGrid(512, 64)
+	g := NewGrid(512, 256) // as in board.newBoard
 	for i := range 100_000 {
 		x, y := float64(i%316)*220, float64(i/316)*160
 		g.Set(fmt.Sprint(i), Rect{X: x, Y: y, W: 180, H: 120})
 	}
-	view := Rect{X: 20_000, Y: 20_000, W: 2880, H: 1620} // 1920x1080 plus 50% margin
+	rng := rand.New(rand.NewPCG(1, 2))
+	var times []time.Duration
 	b.ResetTimer()
 	for b.Loop() {
+		// 1920x1080 plus 50% margin, anywhere on the 69,500 x 50,500 board.
+		view := Rect{X: rng.Float64() * 66_000, Y: rng.Float64() * 48_000, W: 2880, H: 1620}
+		start := time.Now()
 		n := 0
 		g.Query(view, func(string, Rect) bool { n++; return true })
+		times = append(times, time.Since(start))
 	}
+	slices.Sort(times)
+	b.ReportMetric(float64(times[len(times)/2].Nanoseconds()), "p50-ns/query")
+	b.ReportMetric(float64(times[len(times)*99/100].Nanoseconds()), "p99-ns/query")
 }
 
 func BenchmarkMove100k(b *testing.B) {

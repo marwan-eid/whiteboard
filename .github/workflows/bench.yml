@@ -15,6 +15,9 @@ on:
       duration:
         description: "Editing time after the ramp (scenario default: 310s)"
         default: "310s"
+      tick:
+        description: "Board tick interval on the node"
+        default: "20ms"
 
 permissions:
   contents: read
@@ -31,6 +34,7 @@ jobs:
         run: ${{ fromJSON(inputs.runs) }}
     env:
       OUT: results/${{ matrix.editors }}-${{ matrix.run }}
+      TICK: ${{ inputs.tick }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -43,7 +47,7 @@ jobs:
             echo "commit: $(git rev-parse HEAD)"
             echo "go: $(go version)"
             echo "runner: $RUNNER_NAME ($ImageOS $ImageVersion)"
-            echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}"
+            echo "editors: ${{ matrix.editors }}, run ${{ matrix.run }}, duration ${{ inputs.duration }}, tick ${{ inputs.tick }}"
             echo "server: 1 node + Postgres on cores 0-1 (deploy/compose.bench.yaml); loadgen on cores 2-3"
             echo "loadgen: GOGC=400 GOMEMLIMIT=10GiB, clients keep no replicas (client.Config.StampsOnly)"
             echo "--- lscpu"; lscpu

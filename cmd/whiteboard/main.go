@@ -97,7 +97,7 @@ func run() error {
 	}()
 
 	m := metrics.New()
-	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st, Placement: node}, log, m)
+	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st, Placement: node, Tick: cfg.Tick}, log, m)
 	go boards.Run(clusterCtx)
 	go node.Listen(clusterCtx, boards.KickLink)
 	gw := gateway.New(gateway.Config{

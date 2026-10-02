@@ -19,10 +19,23 @@ function stats(xs: number[]) {
 
 test("large board: load, pan, zoom out to LOD", async ({ page }) => {
   test.setTimeout(180_000);
+  // Bytes received before the first objects show: WebSocket frames (CDP) plus HTTP (resource timing).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Network.enable");
+  let wsBytes = 0;
+  cdp.on("Network.webSocketFrameReceived", (e) => (wsBytes += Math.floor((e.response.payloadData.length * 3) / 4)));
+  const throttle = Number(process.env.PERF_CPU_THROTTLE ?? 1);
+  if (throttle > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
   const t0 = Date.now();
   await page.goto(`/b/${BOARD}`);
+  // The app module starts after its first awaits; under CPU throttling that takes a while.
+  await page.waitForFunction(() => window.__whiteboard !== undefined, null, { timeout: 60_000 });
   await expect.poll(() => hook<unknown[]>(page, "visible").then((v) => v.length), { timeout: 60_000 }).toBeGreaterThan(0);
   const firstObjectsMs = Date.now() - t0;
+  const wsBytesAtFirst = wsBytes;
+  const httpBytes = await page.evaluate(() =>
+    performance.getEntriesByType("resource").concat(performance.getEntriesByType("navigation")).reduce((n, e) => n + ((e as PerformanceResourceTiming).transferSize || 0), 0),
+  );
   await page.waitForTimeout(1000);
   const heldAtStart = (await hook<unknown[]>(page, "visible")).length;
   await hook(page, "frameTimes"); // discard load frames
@@ -50,9 +63,13 @@ test("large board: load, pan, zoom out to LOD", async ({ page }) => {
     const d = g?.getExtension("WEBGL_debug_renderer_info");
     return d ? String(g!.getParameter(d.UNMASKED_RENDERER_WEBGL)) : "unknown";
   });
+  const heapMb = await page.evaluate(() => ((performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0) / 2 ** 20);
   const result = {
     board: BOARD,
     renderer: gpu,
+    cpu_throttle: throttle,
+    bytes_before_first_objects: { websocket: wsBytesAtFirst, http: httpBytes },
+    js_heap_mb_at_end: +heapMb.toFixed(1),
     viewport: page.viewportSize(),
     first_objects_ms: firstObjectsMs,
     objects_held: { start: heldAtStart, after_pan: heldAfterPan, lod: heldInLOD },

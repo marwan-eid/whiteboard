@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 )
 
 func env(m map[string]string) func(string) string {
@@ -32,11 +33,12 @@ func TestLoadOverrides(t *testing.T) {
 		"LOG_LEVEL":        "DEBUG",
 		"MAX_CONNS_PER_IP": "0",
 		"TRUST_PROXY":      "true",
+		"TICK":             "33ms",
 	}), host("ignored"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":9000" || cfg.NodeID != "node-7" || cfg.LogLevel != slog.LevelDebug || cfg.MaxConnsPerIP != 0 || !cfg.TrustProxy {
+	if cfg.Addr != ":9000" || cfg.NodeID != "node-7" || cfg.LogLevel != slog.LevelDebug || cfg.MaxConnsPerIP != 0 || !cfg.TrustProxy || cfg.Tick != 33*time.Millisecond {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
 }
@@ -52,6 +54,7 @@ func TestLoadErrors(t *testing.T) {
 		"no node id":           {map[string]string{"DATABASE_URL": "x"}, failingHost},
 		"bad MAX_CONNS_PER_IP": {map[string]string{"DATABASE_URL": "x", "MAX_CONNS_PER_IP": "-1"}, host("h")},
 		"bad TRUST_PROXY":      {map[string]string{"DATABASE_URL": "x", "TRUST_PROXY": "maybe"}, host("h")},
+		"bad TICK":             {map[string]string{"DATABASE_URL": "x", "TICK": "fast"}, host("h")},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
