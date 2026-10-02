@@ -9,8 +9,8 @@ This doc defines how each engineering target is measured. Results go in `benchma
 | 2. Smooth with 100k objects | Pan p95 5.9–6.8 ms on an Intel UHD 630 laptop GPU; 42–47 ms with 4× CPU throttling. Viewport query p99 79–88 µs on the server. | [2026-10-02-browser-100k.md](../benchmarks/results/2026-10-02-browser-100k.md) |
 | 3. Offline merges | Property tests and shared vectors pass in CI (Go `rapid`, TS `fast-check`) | test suites |
 | 4. Storage | 31.3 B/edit with full history at 1M edits | [2026-09-28-storage.md](../benchmarks/results/2026-09-28-storage.md) |
-| 5. Failover without losing edits | Covered by the W8 tests (no acknowledged edit lost on SIGKILL); the chaos run under load is not done yet | ADR-0005 |
-| 6. Timer skew | Not measured yet (a browser test checks two clients agree within 1 s, one with its clock an hour off) | – |
+| 5. Failover without losing edits | 12 chaos runs under load (250 editors, 2 nodes), 0 acknowledged edits lost and 0 duplicated. Recovery to 99% of editors: 4.0–4.9 s after a SIGKILL, 7.6–8.0 s after a 10 s pause | [2026-10-03-chaos.md](../benchmarks/results/2026-10-03-chaos.md) |
+| 6. Timer skew | 50 clients with clocks off by up to ±5 min and 10–75 ms random delay each way: displayed time spread p50 42 ms, p99 50.5 ms (local run) | [2026-10-03-timer-skew.md](../benchmarks/results/2026-10-03-timer-skew.md) |
 | 7. Real users | Counted live since 2026-10-02 on the server (internal/usage): guests who edited, and boards used by 2+ people at once, per day and week; shown in the live stats panel | live demo |
 | WAN latency | 50 editors over the internet against the live demo (fallback Micro VM, ~62 ms round trip): p50 99.6 ms, p99 230 ms | [2026-10-02-wan.md](../benchmarks/results/2026-10-02-wan.md) |
 
