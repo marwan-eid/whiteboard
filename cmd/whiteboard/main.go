@@ -31,6 +31,7 @@ import (
 	"whiteboard/internal/metrics"
 	"whiteboard/internal/ratelimit"
 	"whiteboard/internal/store"
+	"whiteboard/internal/usage"
 )
 
 func main() {
@@ -96,8 +97,12 @@ func run() error {
 		close(left)
 	}()
 
+	// Real use of the demo, counted on the server (docs/BENCHMARKS.md target 7).
+	recorder := usage.New(pool, log)
+	go recorder.Run(clusterCtx)
+
 	m := metrics.New()
-	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st, Placement: node, Tick: cfg.Tick}, log, m)
+	boards := board.NewRegistry(board.Config{NodeID: cfg.NodeID, Store: st, Placement: node, Tick: cfg.Tick, Together: recorder.Together}, log, m)
 	go boards.Run(clusterCtx)
 	go node.Listen(clusterCtx, boards.KickLink)
 	gw := gateway.New(gateway.Config{
@@ -105,6 +110,7 @@ func run() error {
 		Signer:     signer,
 		ConnsPerIP: ratelimit.NewCounter(cfg.MaxConnsPerIP),
 		TrustProxy: cfg.TrustProxy,
+		Edited:     recorder.Edited,
 	}, boards, log, m)
 	srv := &http.Server{
 		Addr: cfg.Addr,
@@ -127,6 +133,7 @@ func run() error {
 			TrustProxy:   cfg.TrustProxy,
 			NodeID:       cfg.NodeID,
 			Route:        node.Route,
+			Usage:        recorder.Counts,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

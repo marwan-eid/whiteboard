@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"whiteboard/internal/metrics"
+	"whiteboard/internal/usage"
 )
 
 // Stats is what the public live stats panel shows, for this node. Every
@@ -19,6 +21,8 @@ type Stats struct {
 	// Boards is boards loaded on this node.
 	Boards int `json:"boards"`
 	metrics.LiveStats
+	// Usage is the demo's real use, counted on the server (nil if not tracked).
+	Usage *usage.Counts `json:"usage,omitempty"`
 }
 
 // statsAPI serves the stats as JSON and as a server-sent event stream, one
@@ -32,6 +36,10 @@ type statsAPI struct {
 	mu   sync.Mutex
 	at   time.Time
 	last Stats
+
+	usage     func(context.Context) (usage.Counts, error)
+	usageAt   time.Time
+	lastUsage *usage.Counts
 }
 
 func (a *statsAPI) register(mux *http.ServeMux) {
@@ -54,6 +62,16 @@ func (a *statsAPI) snapshot() Stats {
 			Boards:      int(metrics.GaugeValue(a.m.BoardsActive)),
 			LiveStats:   a.m.Live.Snapshot(),
 		}
+		// Usage comes from Postgres, so it is refreshed only once a minute.
+		if a.usage != nil && time.Since(a.usageAt) >= time.Minute {
+			a.usageAt = time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			if c, err := a.usage(ctx); err == nil {
+				a.lastUsage = &c
+			}
+			cancel()
+		}
+		a.last.Usage = a.lastUsage
 	}
 	return a.last
 }

@@ -12,6 +12,8 @@ interface Stats {
   syncP99Ms: number;
   samples: number;
   windowS: number;
+  // Real use of this deployment, counted on the server (internal/usage).
+  usage?: { guestsToday: number; guests7d: number; sharedBoardsToday: number; sharedBoards7d: number };
 }
 
 const ms = (v: number) => (v < 10 ? v.toFixed(1) : Math.round(v).toString());
@@ -75,6 +77,24 @@ export function StatsPanel({ session, connection }: { session: SyncSession; conn
             <small>this browser: edit sent → acknowledged; last {session.roundTripSamples} edits</small>
           </dt>
           <dd>{rtt === null ? "–" : `${ms(rtt)} ms`}</dd>
+          {stats.usage && (
+            <>
+              <dt>
+                People who edited
+                <small>today / last 7 days (UTC), all servers</small>
+              </dt>
+              <dd data-stat="guests">
+                {stats.usage.guestsToday} / {stats.usage.guests7d}
+              </dd>
+              <dt>
+                Boards used together
+                <small>with 2+ people at once, today / last 7 days</small>
+              </dt>
+              <dd>
+                {stats.usage.sharedBoardsToday} / {stats.usage.sharedBoards7d}
+              </dd>
+            </>
+          )}
         </dl>
       )}
       {stats && <p class="muted">Server {stats.node}, updated every second.</p>}

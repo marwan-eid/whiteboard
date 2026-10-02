@@ -8,8 +8,11 @@ test("the live stats panel streams numbers through the proxy and counts edits", 
   await page.getByRole("button", { name: "Live stats" }).click();
   const stats = page.getByTestId("stats");
   await expect(stats.locator("[data-stat=connections]")).not.toHaveText("0");
+  // Usage counts (Postgres) are shown too; they refresh once a minute.
+  await expect(stats.locator("[data-stat=guests]")).toBeVisible();
 
-  for (let i = 0; i < 5; i++) await page.mouse.dblclick(200 + i * 120, 400);
+  // Draw clear of the panel (bottom left), or a click could land on its close button.
+  for (let i = 0; i < 5; i++) await page.mouse.dblclick(450 + i * 120, 250);
   await expect.poll(() => page.evaluate(() => window.__whiteboard!.pending())).toBe(0);
   // Edits count once their second is complete; the rate is over 10 s.
   await expect.poll(async () => Number(await stats.locator("[data-stat=edits]").innerText()), { timeout: 5_000 }).toBeGreaterThan(0);

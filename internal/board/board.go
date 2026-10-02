@@ -85,6 +85,9 @@ type Config struct {
 	// IOTimeout bounds each load, commit and snapshot write.
 	IOTimeout time.Duration
 	Now       func() time.Time
+	// Together, if set, is told when a board has two or more clients at once
+	// (usage counts; it must not block).
+	Together func(boardID string)
 	// Placement decides which node serves each board; nil means this node
 	// serves them all. See Registry.Run.
 	Placement Placement
@@ -456,6 +459,9 @@ func (b *Board) handle(m any) {
 		view, lod := viewRect(m.viewport)
 		c := &clientState{conn: m.conn, view: view, lod: lod, moves: map[string]bool{}, role: m.role, linkID: m.linkID}
 		b.clients[id] = c
+		if len(b.clients) >= 2 && b.cfg.Together != nil {
+			b.cfg.Together(b.id)
+		}
 		b.joining = append(b.joining, c)
 		b.onlineChanged = true
 		m.reply <- nil

@@ -329,6 +329,7 @@ Built in W6 (`internal/access`, `internal/ratelimit`).
   - Timing: `board_tick_duration_seconds`, `board_commit_duration_seconds`, `board_load_duration_seconds`, `board_snapshot_duration_seconds`, and `sync_server_latency_seconds`, from a batch arriving until it is committed and its frames are queued to the other clients.
   - Snapshots: `board_snapshots_written_total`, `board_snapshot_failures_total`.
 - **Live stats panel (W7):** `GET /api/stats/stream` sends a server-sent event once a second (`GET /api/stats` gives one snapshot). It reports, for the node the browser is on: open connections, boards in memory, edits per second, and p50/p99 of server sync time (as in `sync_server_latency_seconds`). The rate and percentiles are over the last 10 complete seconds, kept in per-second HDR histograms (`metrics.Live`). The panel adds the browser's own median round trip over its last 50 edits, from sending an edit to its ack, timed from when it was actually sent. Each number says what it measures; none of them is a benchmark result. Clients do not report latency to the server.
+- **Usage counts (W11):** `internal/usage` records, once per day each, a hash of every guest id that edits and every board that has 2+ people connected at once (tables `usage_guests`, `usage_boards`). Writes are asynchronous and dropped rather than slowing an edit. `/api/stats` reports today and the last 7 days, refreshed once a minute; the stats panel shows them. No third-party analytics.
 - **Logs:** structured JSON via `slog`.
 - **Grafana:** used in production.
 

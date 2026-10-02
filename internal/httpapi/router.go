@@ -13,6 +13,7 @@ import (
 	"whiteboard/internal/metrics"
 	"whiteboard/internal/protocol"
 	"whiteboard/internal/ratelimit"
+	"whiteboard/internal/usage"
 )
 
 type Deps struct {
@@ -35,6 +36,8 @@ type Deps struct {
 	NodeID string
 	// Route names the node serving a board (cluster.Node.Route).
 	Route func(ctx context.Context, boardID string) (string, error)
+	// Usage reports usage counts for /api/stats (usage.Recorder.Counts).
+	Usage func(ctx context.Context) (usage.Counts, error)
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -57,7 +60,7 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	// Public live numbers for the stats panel.
-	(&statsAPI{node: d.NodeID, m: d.Metrics, every: time.Second}).register(mux)
+	(&statsAPI{node: d.NodeID, m: d.Metrics, every: time.Second, usage: d.Usage}).register(mux)
 
 	// Scraped by Prometheus on the internal network; Caddy does not expose it.
 	mux.Handle("GET /metrics", promhttp.HandlerFor(d.Metrics.Registry, promhttp.HandlerOpts{}))

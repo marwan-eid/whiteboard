@@ -41,6 +41,9 @@ type Config struct {
 	Authorizer access.Authorizer
 	// Signer verifies guest tokens (default: tokens are ignored).
 	Signer *access.Signer
+	// Edited, if set, is told the first time each connection's guest edits
+	// (usage counts; it must not block).
+	Edited func(guestID string)
 	// ConnsPerIP caps open connections per client IP (default: no limit).
 	ConnsPerIP *ratelimit.Counter
 	// TrustProxy takes the client IP from X-Forwarded-For (see config.TrustProxy).
@@ -218,6 +221,7 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 
 	lim := g.newLimits()
 	var lastCursor time.Time
+	edited := false
 	for {
 		msg, size, err := g.read(ctx, c, 0)
 		if err != nil {
@@ -254,6 +258,10 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 			}
 			if err := g.throttle(ctx, lim.ops, len(m.OpBatch.GetOps()), "ops"); err != nil {
 				return err
+			}
+			if !edited && g.cfg.Edited != nil {
+				edited = true
+				g.cfg.Edited(guestID)
 			}
 			if err := b.Submit(ctx, conn.id, m.OpBatch); err != nil {
 				return err
