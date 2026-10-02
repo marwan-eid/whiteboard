@@ -287,22 +287,12 @@ func (g *Gateway) serve(ctx context.Context, c *websocket.Conn) error {
 
 // writeLoop drains the connection's send queue onto the socket.
 func (g *Gateway) writeLoop(ctx context.Context, c *websocket.Conn, send <-chan []byte) {
-	// One deadline context serves many writes: allocating one per message cost
-	// about 7% of a loaded node's CPU. Each write still gets at least half of
-	// WriteTimeout.
-	var wctx context.Context
-	var renewAt time.Time
-	cancel := context.CancelFunc(func() {})
-	defer func() { cancel() }()
+	dl := &writeDeadline{parent: ctx, timeout: g.cfg.WriteTimeout}
+	defer dl.stop()
 	for {
 		select {
 		case data := <-send:
-			if now := time.Now(); wctx == nil || now.After(renewAt) {
-				cancel()
-				wctx, cancel = context.WithTimeout(ctx, g.cfg.WriteTimeout)
-				renewAt = now.Add(g.cfg.WriteTimeout / 2)
-			}
-			err := c.Write(wctx, websocket.MessageBinary, data)
+			err := c.Write(dl.get(), websocket.MessageBinary, data)
 			if err != nil {
 				c.CloseNow()
 				return
@@ -310,6 +300,32 @@ func (g *Gateway) writeLoop(ctx context.Context, c *websocket.Conn, send <-chan 
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// writeDeadline hands out one deadline context for many writes: allocating
+// one per message cost about 7% of a loaded node's CPU. Each write still
+// gets at least half of the timeout.
+type writeDeadline struct {
+	parent  context.Context
+	timeout time.Duration
+	ctx     context.Context
+	cancel  context.CancelFunc
+	renewAt time.Time
+}
+
+func (d *writeDeadline) get() context.Context {
+	if now := time.Now(); d.ctx == nil || now.After(d.renewAt) {
+		d.stop()
+		d.ctx, d.cancel = context.WithTimeout(d.parent, d.timeout)
+		d.renewAt = now.Add(d.timeout / 2)
+	}
+	return d.ctx
+}
+
+func (d *writeDeadline) stop() {
+	if d.cancel != nil {
+		d.cancel()
 	}
 }
 
