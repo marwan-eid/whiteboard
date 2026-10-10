@@ -173,8 +173,10 @@ func (c *Client) dial(ctx context.Context) error {
 		// Nodes disagreeing about who owns the board (a lease changing hands): slow down.
 		time.Sleep(min(time.Duration(moves)*50*time.Millisecond, time.Second))
 	}
+	c.trace("dial %s", dialURL)
 	ws, _, err := websocket.Dial(ctx, dialURL, nil) //nolint:bodyclose // the websocket library owns the handshake response body
 	if err != nil {
+		c.trace("dial failed: %v", err)
 		// The node we were sent to is unreachable: start again from cfg.URL.
 		c.mu.Lock()
 		c.target = ""
@@ -332,6 +334,7 @@ func (c *Client) readLoop(ws *websocket.Conn, last *atomic.Int64) {
 			c.trace("moved to %s", m.Moved.GetNodeId())
 			ws.CloseNow()
 		case *pb.ServerMessage_Error:
+			c.trace("server error %v: %s", m.Error.GetCode(), m.Error.GetMessage())
 			ws.CloseNow()
 		}
 	}
@@ -339,6 +342,7 @@ func (c *Client) readLoop(ws *websocket.Conn, last *atomic.Int64) {
 
 func (c *Client) onDisconnect(ws *websocket.Conn) {
 	c.mu.Lock()
+	c.trace("disconnected (current %v, moved %v)", c.conn == ws, c.moved)
 	if c.conn == ws {
 		c.conn = nil
 		c.welcomed = make(chan struct{})

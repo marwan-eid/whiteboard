@@ -3,7 +3,6 @@ package cluster_test
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"math/rand/v2"
@@ -63,6 +62,71 @@ type cluster2 struct {
 	order []*testNode
 	front *httptest.Server // round-robins /ws over live nodes, like Caddy
 	st    *store.Postgres
+	// traces holds each client's recent connection events, in creation order.
+	traces []*tracer
+}
+
+// logTail keeps the last lines written to it.
+type logTail struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (l *logTail) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.lines = append(l.lines, string(p))
+	if len(l.lines) > 400 {
+		l.lines = l.lines[len(l.lines)-400:]
+	}
+	return len(p), nil
+}
+
+func (l *logTail) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return fmt.Sprintf("node logs (last %d lines):\n%s", len(l.lines), strings.Join(l.lines, ""))
+}
+
+// tracer keeps a client's last connection events (frames and edits are
+// skipped), so a failing test can show what each client went through.
+type tracer struct {
+	mu    sync.Mutex
+	start time.Time
+	lines []string
+}
+
+func (tr *tracer) add(line string) {
+	if strings.HasPrefix(line, "frame ") || strings.HasPrefix(line, "edit ") {
+		return
+	}
+	if i := strings.Index(line, " objects="); i >= 0 {
+		line = line[:i]
+	}
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	if tr.start.IsZero() {
+		tr.start = time.Now()
+	}
+	tr.lines = append(tr.lines, fmt.Sprintf("%6dms %s", time.Since(tr.start).Milliseconds(), line))
+	if len(tr.lines) > 40 {
+		tr.lines = tr.lines[len(tr.lines)-40:]
+	}
+}
+
+// dump logs every client's stats and recent events.
+func (c *cluster2) dump(t *testing.T, clients []*client.Client) {
+	t.Helper()
+	for i, cl := range clients {
+		t.Logf("client %d: %+v", cl.ID(), cl.Stats())
+		if i < len(c.traces) {
+			c.traces[i].mu.Lock()
+			for _, l := range c.traces[i].lines {
+				t.Logf("    %s", l)
+			}
+			c.traces[i].mu.Unlock()
+		}
+	}
 }
 
 func startCluster(t *testing.T, ids ...string) *cluster2 {
@@ -76,7 +140,14 @@ func startCluster(t *testing.T, ids ...string) *cluster2 {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// Node logs are kept and shown only if the test fails.
+	logs := &logTail{}
+	log := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(logs.String())
+		}
+	})
 	c := &cluster2{nodes: map[string]*testNode{}, st: st}
 	for _, id := range ids {
 		n := &testNode{id: id, metrics: metrics.New()}
@@ -132,10 +203,13 @@ func startCluster(t *testing.T, ids ...string) *cluster2 {
 
 func (c *cluster2) client(t *testing.T, boardID string) *client.Client {
 	t.Helper()
+	tr := &tracer{}
 	cl := client.New(client.Config{
 		URL: "ws" + strings.TrimPrefix(c.front.URL, "http") + "/ws", BoardID: boardID, Reconnect: true,
 		NodeURL: func(node string) string { return c.nodes[node].wsURL() },
+		Trace:   tr.add,
 	})
+	c.traces = append(c.traces, tr)
 	t.Cleanup(cl.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -206,9 +280,7 @@ func (c *cluster2) settle(t *testing.T, boardID string, clients []*client.Client
 			break
 		}
 		if time.Now().After(deadline) {
-			for _, cl := range clients {
-				t.Logf("client %d: %+v", cl.ID(), cl.Stats())
-			}
+			c.dump(t, clients)
 			t.Fatal("clients did not settle")
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -277,6 +349,7 @@ func TestKilledOwnerFailsOver(t *testing.T) {
 			break
 		}
 		if time.Since(killedAt) > 15*time.Second {
+			c.dump(t, clients)
 			t.Fatal("clients did not reconnect")
 		}
 		time.Sleep(10 * time.Millisecond)
