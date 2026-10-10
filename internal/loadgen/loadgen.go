@@ -197,8 +197,19 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 		W: cfg.ViewW * 2, H: cfg.ViewH * 2,
 	}
 
-	// Only this editor's read goroutine touches hist.
+	// The read goroutine records into hist. It can still be delivering a frame
+	// when this function returns (Close does not wait for it), so recording
+	// stops, under histMu, before the caller gets hist.
 	hist = newHistogram()
+	var (
+		histMu   sync.Mutex
+		histDone bool
+	)
+	defer func() {
+		histMu.Lock()
+		histDone = true
+		histMu.Unlock()
+	}()
 	c := client.New(client.Config{
 		URL: cfg.URL, BoardID: cfg.BoardID, Reconnect: true, Viewport: view,
 		// Only timings matter here; keeping replicas would load the generator, not the server.
@@ -215,7 +226,11 @@ func runEditor(ctx context.Context, cfg Config, i int, sent *sentTimes, opsSent 
 				return
 			}
 			record := func(us int64) {
-				_ = hist.RecordValue(us)
+				histMu.Lock()
+				if !histDone {
+					_ = hist.RecordValue(us)
+				}
+				histMu.Unlock()
 				samples = append(samples, us)
 			}
 			for _, b := range f.GetBatches() {
