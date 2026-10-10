@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { started } from "./app";
 
 // The usable-editor milestone (W3): every tool, selection, resize, undo/redo,
 // pan/zoom and live cursors, checked through the real stack.
@@ -10,6 +11,7 @@ const settled = (p: Page) => expect.poll(() => p.evaluate(() => window.__whitebo
 async function open(browser: Browser, board: string): Promise<Page> {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   await page.goto(`/b/${board}`);
+  await started(page);
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   return page;
 }

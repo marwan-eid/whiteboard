@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { started } from "./app";
 
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible());
 const pending = (p: Page) => p.evaluate(() => window.__whiteboard!.pending());
@@ -6,6 +7,7 @@ const pending = (p: Page) => p.evaluate(() => window.__whiteboard!.pending());
 async function open(browser: import("@playwright/test").Browser, board: string): Promise<Page> {
   const page = await (await browser.newContext()).newPage();
   await page.goto(`/b/${board}`);
+  await started(page);
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   return page;
 }
@@ -48,6 +50,8 @@ test("a late joiner and a reloaded tab get the current board", async ({ browser 
   await expect.poll(async () => (await visible(late)).length).toBe(2);
 
   await a.reload();
+
+  await started(a);
   await expect(a.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   await expect.poll(async () => (await visible(a)).length).toBe(2);
 });

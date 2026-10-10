@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { started } from "./app";
 
 // Kills and restarts every node of the Compose stack (a full outage), so it
 // must run alone (workers: 1). Failover between nodes is test/e2e/kill_test.go.
@@ -12,6 +13,7 @@ test("edits made while the node is down are kept and synced after it restarts", 
   test.setTimeout(120_000);
   const board = `e2e-restart-${Date.now()}`;
   await page.goto(`/b/${board}`);
+  await started(page);
   const status = page.locator(".status");
   await expect(status).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
 
@@ -36,5 +38,6 @@ test("edits made while the node is down are kept and synced after it restarts", 
   // A new visitor sees all four shapes, from the restarted node.
   const other = await (await browser.newContext()).newPage();
   await other.goto(`/b/${board}`);
+  await started(other);
   await expect.poll(() => visible(other), { timeout: 15_000 }).toBe(4);
 });

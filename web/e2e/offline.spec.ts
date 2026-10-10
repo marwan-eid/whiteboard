@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { started } from "./app";
 
 // Kills and restarts every node of the Compose stack (a full outage), so it
 // must run alone (workers: 1). Failover between nodes is test/e2e/kill_test.go.
@@ -24,6 +25,7 @@ test("unsynced edits survive a reload while offline and sync when the server is 
   test.setTimeout(120_000);
   const board = `e2e-offline-${Date.now()}`;
   await page.goto(`/b/${board}`);
+  await started(page);
   await connected(page);
   await page.mouse.dblclick(200, 200);
   await expect.poll(() => pending(page)).toBe(0);
@@ -36,6 +38,7 @@ test("unsynced edits survive a reload while offline and sync when the server is 
 
   // Reload with the server still down: the two unsynced shapes come back from IndexedDB.
   await page.reload();
+  await started(page);
   await expect.poll(() => pending(page)).toBe(2);
   expect(await visible(page)).toBe(2);
   await expect(status(page)).toContainText("2 unsynced");
@@ -47,10 +50,12 @@ test("unsynced edits survive a reload while offline and sync when the server is 
 
   const other = await (await browser.newContext()).newPage();
   await other.goto(`/b/${board}`);
+  await started(other);
   await expect.poll(() => visible(other), { timeout: 15_000 }).toBe(3);
 
   // Nothing is left to resend: another reload shows the board without pending edits.
   await page.reload();
+  await started(page);
   await expect(status(page)).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   expect(await pending(page)).toBe(0);
   await expect.poll(() => visible(page)).toBe(3);
@@ -61,7 +66,9 @@ test("two tabs of one browser on the same board both stay connected", async ({ c
   const a = await context.newPage();
   const b = await context.newPage();
   await a.goto(`/b/${board}`);
+  await started(a);
   await b.goto(`/b/${board}`);
+  await started(b);
   await connected(a);
   await connected(b);
 
@@ -72,6 +79,7 @@ test("two tabs of one browser on the same board both stay connected", async ({ c
 
   // Reloading one tab takes back its own id, not the other tab's.
   await b.reload();
+  await started(b);
   await connected(b);
   await expect(status(a)).toHaveAttribute("data-status", "connected");
   await b.mouse.dblclick(450, 500);

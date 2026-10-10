@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { started } from "./app";
 
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible().length);
 const hist = (p: Page) => p.evaluate(() => window.__whiteboard!.history());
@@ -6,6 +7,7 @@ const hist = (p: Page) => p.evaluate(() => window.__whiteboard!.history());
 async function open(browser: Browser, board: string): Promise<Page> {
   const page = await (await browser.newContext()).newPage();
   await page.goto(`/b/${board}`);
+  await started(page);
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   return page;
 }

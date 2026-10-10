@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { started } from "./app";
 
 const timer = (p: Page) => p.getByTestId("timer");
 const seconds = async (p: Page) => {
@@ -12,6 +13,7 @@ async function open(browser: Browser, board: string, clockOffsetMs = 0): Promise
   // on the server's clock, estimated from pings.
   if (clockOffsetMs) await page.clock.install({ time: Date.now() + clockOffsetMs });
   await page.goto(`/b/${board}`);
+  await started(page);
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   return page;
 }

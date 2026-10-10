@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { started } from "./app";
 
 const visible = (p: Page) => p.evaluate(() => window.__whiteboard!.visible());
 const status = (p: Page) => p.locator(".status");
@@ -13,6 +14,7 @@ async function connected(p: Page): Promise<void> {
 async function guest(browser: Browser, url: string): Promise<Page> {
   const page = await (await browser.newContext()).newPage();
   await page.goto(url);
+  await started(page);
   return page;
 }
 
@@ -70,6 +72,7 @@ test("private boards: owner, strangers, view and edit links, revocation", async 
   await expect(status(viewer)).toHaveAttribute("data-status", "rejected");
   await expect(status(viewer)).toContainText("access revoked");
   await viewer.reload();
+  await started(viewer);
   await expect(status(viewer)).toHaveAttribute("data-status", "rejected", { timeout: 15_000 });
   await expect(status(editor)).toHaveAttribute("data-status", "connected");
 });

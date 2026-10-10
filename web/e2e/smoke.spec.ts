@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { started } from "./app";
 
 test("app loads, renders a canvas, and connects to a node", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (err) => errors.push(err.message));
 
   await page.goto("/");
+
+  await started(page);
   await expect(page.locator("#stage canvas")).toBeVisible();
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   await expect(page.locator(".status")).toContainText(/node-\d/);
@@ -17,6 +20,7 @@ test("app loads, renders a canvas, and connects to a node", async ({ page }) => 
 
 test("board id comes from the /b/{id} path", async ({ page }) => {
   await page.goto("/b/team-retro");
+  await started(page);
   await expect(page.locator(".status")).toContainText("board: team-retro");
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
 });

@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { started } from "./app";
 
 test("the live stats panel streams numbers through the proxy and counts edits", async ({ page }) => {
   await page.goto(`/b/e2e-stats-${Date.now()}`);
+  await started(page);
   await expect(page.locator(".status")).toHaveAttribute("data-status", "connected", { timeout: 15_000 });
   await expect.poll(() => page.evaluate(() => window.__whiteboard!.ready()), { timeout: 15_000 }).toBe(true);
 
