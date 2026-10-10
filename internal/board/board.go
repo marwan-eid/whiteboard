@@ -464,7 +464,7 @@ func (b *Board) load() error {
 	})
 	b.committedSeq.Store(b.seq)
 	b.metrics.BoardLoadDuration.Observe(time.Since(start).Seconds())
-	b.log.Info("board loaded", "seq", b.seq, "objects", b.doc.Len(), "replayed", len(loaded.Tail), "took", time.Since(start))
+	b.log.Info("board loaded", "epoch", b.epoch, "seq", b.seq, "objects", b.doc.Len(), "replayed", len(loaded.Tail), "took", time.Since(start))
 	return nil
 }
 
@@ -641,6 +641,7 @@ func (b *Board) flush() error {
 			return err
 		}
 		b.committedSeq.Store(b.seq)
+		b.log.Debug("committed", "from", entries[0].Seq, "to", b.seq, "epoch", b.epoch)
 		batches = make([]encodedBatch, len(b.uncommitted))
 		for i, p := range b.uncommitted {
 			batches[i] = encodeBatch(p.entry, p.before, p.after)

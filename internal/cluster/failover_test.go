@@ -62,8 +62,8 @@ type cluster2 struct {
 	order []*testNode
 	front *httptest.Server // round-robins /ws over live nodes, like Caddy
 	st    *store.Postgres
-	// traces holds each client's recent connection events, in creation order.
-	traces []*tracer
+	// traces holds each client's recent connection events, by client id.
+	traces map[uint64]*tracer
 }
 
 // logTail keeps the last lines written to it.
@@ -76,8 +76,8 @@ func (l *logTail) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.lines = append(l.lines, string(p))
-	if len(l.lines) > 400 {
-		l.lines = l.lines[len(l.lines)-400:]
+	if len(l.lines) > 5000 {
+		l.lines = l.lines[len(l.lines)-5000:]
 	}
 	return len(p), nil
 }
@@ -109,22 +109,20 @@ func (tr *tracer) add(line string) {
 		tr.start = time.Now()
 	}
 	tr.lines = append(tr.lines, fmt.Sprintf("%6dms %s", time.Since(tr.start).Milliseconds(), line))
-	if len(tr.lines) > 40 {
-		tr.lines = tr.lines[len(tr.lines)-40:]
+	if len(tr.lines) > 3000 {
+		tr.lines = tr.lines[len(tr.lines)-3000:]
 	}
 }
 
 // dump logs every client's stats and recent events.
 func (c *cluster2) dump(t *testing.T, clients []*client.Client) {
 	t.Helper()
-	for i, cl := range clients {
+	for _, cl := range clients {
 		t.Logf("client %d: %+v", cl.ID(), cl.Stats())
-		if i < len(c.traces) {
-			c.traces[i].mu.Lock()
-			for _, l := range c.traces[i].lines {
-				t.Logf("    %s", l)
-			}
-			c.traces[i].mu.Unlock()
+		if tr := c.traces[cl.ID()]; tr != nil {
+			tr.mu.Lock()
+			t.Log(strings.Join(tr.lines, "\n"))
+			tr.mu.Unlock()
 		}
 	}
 }
@@ -148,9 +146,10 @@ func startCluster(t *testing.T, ids ...string) *cluster2 {
 			t.Log(logs.String())
 		}
 	})
-	c := &cluster2{nodes: map[string]*testNode{}, st: st}
+	c := &cluster2{nodes: map[string]*testNode{}, st: st, traces: map[uint64]*tracer{}}
 	for _, id := range ids {
 		n := &testNode{id: id, metrics: metrics.New()}
+		log := log.With("node", id)
 		n.cluster = cluster.New(cluster.Config{
 			NodeID: id, Heartbeat: 100 * time.Millisecond, LiveFor: time.Second, LeaseTTL: time.Second,
 		}, pool, log)
@@ -209,7 +208,7 @@ func (c *cluster2) client(t *testing.T, boardID string) *client.Client {
 		NodeURL: func(node string) string { return c.nodes[node].wsURL() },
 		Trace:   tr.add,
 	})
-	c.traces = append(c.traces, tr)
+	c.traces[cl.ID()] = tr
 	t.Cleanup(cl.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -311,6 +310,15 @@ func (c *cluster2) settle(t *testing.T, boardID string, clients []*client.Client
 		for _, cs := range cl.Acked() {
 			total++
 			if !logged[fmt.Sprintf("%d:%d", cl.ID(), cs)] {
+				c.dump(t, clients)
+				var mine []string
+				for _, e := range entries {
+					if e.ClientID == cl.ID() {
+						mine = append(mine, fmt.Sprintf("%d@%d", e.ClientSeq, e.Seq))
+					}
+				}
+				t.Logf("the log has %d entries; this client's (client_seq@seq): %s", len(entries), strings.Join(mine, " "))
+				t.Logf("this client's acked client_seqs: %v", cl.Acked())
 				t.Fatalf("client %d batch %d was acked but is not in the log", cl.ID(), cs)
 			}
 		}
