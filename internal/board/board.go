@@ -245,9 +245,13 @@ type Snapshot struct {
 	Objects []*pb.ObjectState
 }
 
-func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClose func(*Board)) *Board {
+// newBoard starts the board's goroutine, so everything that goroutine reads is
+// set here first, epoch and lease included (setting them after was a race).
+func newBoard(id string, cfg Config, log *slog.Logger, m *metrics.Metrics, onClose func(*Board), epoch uint64, lease *leaseClock) *Board {
 	b := &Board{
 		id:             id,
+		epoch:          epoch,
+		lease:          lease,
 		cfg:            cfg,
 		log:            log.With("board", id),
 		metrics:        m,

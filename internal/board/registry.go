@@ -136,8 +136,7 @@ func (r *Registry) get(ctx context.Context, boardID string) (*Board, error) {
 	defer r.mu.Unlock()
 	b := r.boards[boardID]
 	if b == nil {
-		b = newBoard(boardID, r.cfg, r.log, r.metrics, r.remove)
-		b.epoch, b.lease = epoch, lease
+		b = newBoard(boardID, r.cfg, r.log, r.metrics, r.remove, epoch, lease)
 		r.boards[boardID] = b
 	}
 	return b, nil
