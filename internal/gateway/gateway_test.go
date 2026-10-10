@@ -297,8 +297,10 @@ func TestShutdownClosesWithGoingAway(t *testing.T) {
 
 func TestSlowConsumerIsKicked(t *testing.T) {
 	// The flood must not be slowed by the byte rate limit, or the slow client's
-	// socket fills too gradually for this test's timing.
-	h := newHarness(t, Config{SendQueue: 1, BytesPerSec: 1 << 30})
+	// socket fills too gradually for this test's timing. The queue is short
+	// but not 1: with 1, a busy machine that leaves the fast client's writer
+	// unscheduled for a single tick gets the fast client kicked instead.
+	h := newHarness(t, Config{SendQueue: 16, BytesPerSec: 1 << 30})
 	slow := h.dial(t)
 	join(t, slow, helloAs(protocol.Version, "demo", 20))
 	fast := h.dial(t)
@@ -331,11 +333,12 @@ func TestSlowConsumerIsKicked(t *testing.T) {
 	}
 	waitFor(t, kicked)
 
-	// Only the slow client was dropped.
+	// Only the slow client was dropped. (Give a close of the fast one time to
+	// arrive, or this fails later with a misleading timeout on the slow one.)
 	select {
 	case err := <-fastClosed:
 		t.Fatalf("fast client was disconnected too: %v", err)
-	default:
+	case <-time.After(300 * time.Millisecond):
 	}
 	_, err := tryRecv(slow)
 	for err == nil {
