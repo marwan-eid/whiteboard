@@ -2,7 +2,7 @@
 
 An open-source, self-hostable, real-time collaborative whiteboard.
 
-**Live demo: https://51-170-191-178.sslip.io** (open it in two windows). It runs on Oracle Cloud's free tier, currently on a small fallback VM; see [docs/DEPLOY.md](docs/DEPLOY.md).
+**Live demo: https://marwan-whiteboard.duckdns.org** (open it in two windows). It runs on Oracle Cloud's free tier, currently on a small fallback VM; see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ![150 simulated editors drawing on one board, with the live stats panel](docs/media/load-demo.gif)
 
