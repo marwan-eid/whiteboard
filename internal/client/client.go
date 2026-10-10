@@ -69,17 +69,18 @@ type Client struct {
 	serverSeq     uint64
 	conn          *websocket.Conn
 	// target is where the next dial goes after a Moved; empty means cfg.URL.
-	target   string
-	moved    bool // the last disconnect was a Moved
-	moves    int  // Moved answers since the last Welcome
-	dialing  bool
-	offline  bool // Offline() called: stay disconnected
-	welcomed chan struct{}
-	closed   bool
-	resyncs  int
-	connects int
-	acked    []uint64 // client seqs the server acked as applied
-	cursors  map[uint64][2]float64
+	target    string
+	moved     bool // the last disconnect was a Moved
+	redialing bool // a redial loop is running
+	moves     int  // Moved answers since the last Welcome
+	dialing   bool
+	offline   bool // Offline() called: stay disconnected
+	welcomed  chan struct{}
+	closed    bool
+	resyncs   int
+	connects  int
+	acked     []uint64 // client seqs the server acked as applied
+	cursors   map[uint64][2]float64
 	// held is what the server believes this client holds: the objects in
 	// its viewport. Only the server changes it (Welcome, Frame.objects,
 	// Frame.leave). The replica can also contain objects with pending local
@@ -147,54 +148,40 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 }
 
+// errDialing means another goroutine is already opening a connection.
+var errDialing = errors.New("client: a dial is already in progress")
+
 // dial opens a connection unless one is open or being opened, so the client
 // never races itself with two sockets.
 func (c *Client) dial(ctx context.Context) error {
 	c.mu.Lock()
-	if c.conn != nil || c.dialing || c.offline || c.closed {
+	switch {
+	case c.conn != nil || c.offline || c.closed:
 		c.mu.Unlock()
 		return nil
+	case c.dialing:
+		c.mu.Unlock()
+		return errDialing
 	}
 	c.dialing = true
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		c.dialing = false
-		c.mu.Unlock()
-	}()
-
-	c.mu.Lock()
 	dialURL, moves := c.cfg.URL, c.moves
 	if c.target != "" {
 		dialURL = c.target
 	}
 	c.mu.Unlock()
-	if moves > 2 {
-		// Nodes disagreeing about who owns the board (a lease changing hands): slow down.
-		time.Sleep(min(time.Duration(moves)*50*time.Millisecond, time.Second))
-	}
-	c.trace("dial %s", dialURL)
-	ws, _, err := websocket.Dial(ctx, dialURL, nil) //nolint:bodyclose // the websocket library owns the handshake response body
-	if err != nil {
-		c.trace("dial failed: %v", err)
-		// The node we were sent to is unreachable: start again from cfg.URL.
-		c.mu.Lock()
-		c.target = ""
-		c.mu.Unlock()
-		return fmt.Errorf("dial: %w", err)
-	}
-	ws.SetReadLimit(64 << 20)
-	hello := &pb.ClientMessage{Msg: &pb.ClientMessage_Hello{Hello: &pb.Hello{
-		ProtocolVersion: protocol.Version,
-		BoardId:         c.cfg.BoardID,
-		ClientId:        c.cfg.ClientID,
-		Viewport:        c.Viewport(),
-	}}}
-	if err := write(ctx, ws, hello); err != nil {
-		ws.CloseNow()
-		return fmt.Errorf("send hello: %w", err)
-	}
+
+	ws, err := c.open(ctx, dialURL, moves)
+
+	// The dial ends and the connection becomes current in one step. When they
+	// were two, a connection that died at once (a Moved answer) started a
+	// redial that still saw this dial in progress and gave up, while this dial
+	// reported success: nobody was left to reconnect.
 	c.mu.Lock()
+	c.dialing = false
+	if err != nil {
+		c.mu.Unlock()
+		return err
+	}
 	if c.offline || c.closed {
 		c.mu.Unlock()
 		ws.CloseNow()
@@ -210,6 +197,36 @@ func (c *Client) dial(ctx context.Context) error {
 		go c.watch(ws, &last)
 	}
 	return nil
+}
+
+// open dials dialURL and sends the Hello.
+func (c *Client) open(ctx context.Context, dialURL string, moves int) (*websocket.Conn, error) {
+	if moves > 2 {
+		// Nodes disagreeing about who owns the board (a lease changing hands): slow down.
+		time.Sleep(min(time.Duration(moves)*50*time.Millisecond, time.Second))
+	}
+	c.trace("dial %s", dialURL)
+	ws, _, err := websocket.Dial(ctx, dialURL, nil) //nolint:bodyclose // the websocket library owns the handshake response body
+	if err != nil {
+		c.trace("dial failed: %v", err)
+		// The node we were sent to is unreachable: start again from cfg.URL.
+		c.mu.Lock()
+		c.target = ""
+		c.mu.Unlock()
+		return nil, fmt.Errorf("dial: %w", err)
+	}
+	ws.SetReadLimit(64 << 20)
+	hello := &pb.ClientMessage{Msg: &pb.ClientMessage_Hello{Hello: &pb.Hello{
+		ProtocolVersion: protocol.Version,
+		BoardId:         c.cfg.BoardID,
+		ClientId:        c.cfg.ClientID,
+		Viewport:        c.Viewport(),
+	}}}
+	if err := write(ctx, ws, hello); err != nil {
+		ws.CloseNow()
+		return nil, fmt.Errorf("send hello: %w", err)
+	}
+	return ws, nil
 }
 
 // watch pings the server and closes ws if it goes quiet (Config.Liveness).
@@ -360,21 +377,39 @@ func (c *Client) onDisconnect(ws *websocket.Conn) {
 	}
 }
 
+// redial reconnects until a connection is open or the client goes offline or
+// closes. One runs at a time. Whether to stop is decided under the lock that
+// also guards conn, and a dial that succeeded is checked again there: its
+// connection may already be gone (a Moved answer), and the redial that
+// disconnect started found this one still running and left it to carry on.
 func (c *Client) redial() {
-	for attempt := 0; ; attempt++ {
-		c.mu.Lock()
-		stop := c.offline || c.closed || c.conn != nil || c.dialing
+	c.mu.Lock()
+	if c.redialing {
 		c.mu.Unlock()
-		if stop {
+		return
+	}
+	c.redialing = true
+	c.mu.Unlock()
+	for attempt := 0; ; {
+		c.mu.Lock()
+		if c.offline || c.closed || c.conn != nil {
+			c.redialing = false
+			c.mu.Unlock()
 			return
 		}
+		c.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		err := c.dial(ctx)
 		cancel()
-		if err == nil {
-			return
+		switch {
+		case err == nil:
+		case errors.Is(err, errDialing):
+			// Connect is dialing: wait for how that ends, and take over if it fails.
+			time.Sleep(10 * time.Millisecond)
+		default:
+			time.Sleep(min(time.Duration(10<<min(attempt, 6))*time.Millisecond, time.Second))
+			attempt++
 		}
-		time.Sleep(min(time.Duration(10<<min(attempt, 6))*time.Millisecond, time.Second))
 	}
 }
 
@@ -396,7 +431,7 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 		ws.CloseNow()
 		return
 	}
-	c.trace("welcome seq=%d last_cs=%d objects=%v", w.GetSeq(), w.GetLastClientSeq(), w.GetObjects())
+	c.trace("welcome node=%s seq=%d last_cs=%d pending=%d objects=%v", w.GetNodeId(), w.GetSeq(), w.GetLastClientSeq(), len(c.pending), w.GetObjects())
 	c.doc = d
 	c.serverSeq = w.GetSeq()
 	clear(c.held)
@@ -411,6 +446,9 @@ func (c *Client) onWelcome(ws *websocket.Conn, w *pb.Welcome) {
 		}
 	}
 	c.pending = kept
+	if len(kept) > 0 {
+		c.trace("resending %d batches, cs %d to %d", len(kept), kept[0].GetClientSeq(), kept[len(kept)-1].GetClientSeq())
+	}
 	for _, b := range c.pending {
 		c.doc.ApplyBatch(b.GetOps(), hlc.FromProto(b.GetStamp()))
 	}
@@ -480,6 +518,20 @@ func (c *Client) onFrame(ws *websocket.Conn, f *pb.Frame) bool {
 		} else {
 			c.cursors[cu.GetClientId()] = [2]float64{cu.GetX(), cu.GetY()}
 		}
+	}
+	if c.cfg.Trace != nil && len(f.GetAcks()) > 0 {
+		var sb strings.Builder
+		for _, a := range f.GetAcks() {
+			switch {
+			case a.GetRejected():
+				fmt.Fprintf(&sb, " %d:rejected", a.GetClientSeq())
+			case a.GetSeq() == 0:
+				fmt.Fprintf(&sb, " %d:dup", a.GetClientSeq())
+			default:
+				fmt.Fprintf(&sb, " %d@%d", a.GetClientSeq(), a.GetSeq())
+			}
+		}
+		c.trace("acks%s", sb.String())
 	}
 	resync := false
 	for _, a := range f.GetAcks() {
